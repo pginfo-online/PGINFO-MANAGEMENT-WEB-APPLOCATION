@@ -93,6 +93,8 @@ export function useAssignResident(pgId: string, roomId: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: roomKeys.list(pgId) });
       qc.invalidateQueries({ queryKey: roomKeys.detail(roomId) });
+      qc.invalidateQueries({ queryKey: ['pg-tenants', pgId] });
+      qc.invalidateQueries({ queryKey: ['tenants'] });
       qc.invalidateQueries({ queryKey: ['property-dashboard', pgId] });
     },
   });
@@ -106,7 +108,22 @@ export function useVacateBed(pgId: string, roomId: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: roomKeys.list(pgId) });
       qc.invalidateQueries({ queryKey: roomKeys.detail(roomId) });
+      qc.invalidateQueries({ queryKey: ['pg-tenants', pgId] });
+      qc.invalidateQueries({ queryKey: ['tenants'] });
       qc.invalidateQueries({ queryKey: ['property-dashboard', pgId] });
     },
   });
 }
+
+export function useUploadRoomPhoto(pgId: string, roomId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ image, imagePublicId }: { image: string; imagePublicId?: string }) =>
+      roomsApi.uploadRoomPhoto(roomId, image, imagePublicId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: roomKeys.list(pgId) });
+      qc.invalidateQueries({ queryKey: roomKeys.detail(roomId) });
+    },
+  });
+}
+

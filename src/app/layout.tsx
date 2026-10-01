@@ -2,6 +2,9 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { AppQueryProvider } from '@/lib/query/provider';
+import { ThemeProvider } from '@/components/theme/theme-provider';
+import { ToastProvider } from '@/components/ui/toast';
+import { ErrorBoundary } from '@/components/ui/error-boundary';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -20,10 +23,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${inter.variable} dark h-full`}>
+    <html lang="en" className={`${inter.variable} h-full`} suppressHydrationWarning>
       <body className="h-full flex flex-col bg-[#080c14] text-slate-100 antialiased font-sans selection:bg-emerald-500/30 selection:text-emerald-200">
         <AppQueryProvider>
-          {children}
+          <ThemeProvider>
+            <ToastProvider>
+              <ErrorBoundary>
+                {children}
+              </ErrorBoundary>
+            </ToastProvider>
+          </ThemeProvider>
         </AppQueryProvider>
       </body>
     </html>

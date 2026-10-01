@@ -25,6 +25,8 @@ import {
 } from '@/features/rooms/hooks/useRooms';
 import { RoomCard } from '@/features/rooms/components/RoomCard';
 import { AddEditRoomModal } from '@/features/rooms/components/AddEditRoomModal';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { useToast } from '@/components/ui/toast';
 import { useQuery } from '@tanstack/react-query';
 import { dashboardApi } from '@/features/dashboard/api/dashboard.api';
 import type { CreatePGRoomPayload, Room } from '@/types/property';
@@ -32,12 +34,14 @@ import type { CreatePGRoomPayload, Room } from '@/types/property';
 export default function RoomsManagementPage() {
   const params = useParams();
   const propertyId = params.propertyId as string;
+  const { toast } = useToast();
 
   // Filter & Search states (matching mobile PropertyScreen)
   const [activeTab, setActiveTab] = useState<'all' | 'vacant' | 'occupied'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFloor, setSelectedFloor] = useState<string>('all');
   const [isAddRoomOpen, setIsAddRoomOpen] = useState(false);
+  const [roomToDelete, setRoomToDelete] = useState<{ id: string; roomNumber: string } | null>(null);
 
   // Queries
   const { data: dashboardData } = useQuery({
@@ -174,17 +178,29 @@ export default function RoomsManagementPage() {
   const handleCreateRoom = async (payload: CreatePGRoomPayload) => {
     try {
       await createRoomMutation.mutateAsync(payload);
+      toast.success(
+        'Room created successfully',
+        `Room ${payload.roomNumber} with ${payload.totalBeds} bed(s) has been added.`
+      );
       setIsAddRoomOpen(false);
-    } catch (err) {
-      console.error('Failed to create room:', err);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to create room';
+      toast.error('Failed to create room', msg);
     }
   };
 
-  const handleDeleteRoom = async (roomId: string) => {
+  const handleConfirmDelete = async () => {
+    if (!roomToDelete) return;
     try {
-      await deleteRoomMutation.mutateAsync(roomId);
-    } catch (err) {
-      console.error('Failed to delete room:', err);
+      await deleteRoomMutation.mutateAsync(roomToDelete.id);
+      toast.success(
+        'Room deleted',
+        `Room ${roomToDelete.roomNumber} and its beds have been removed.`
+      );
+      setRoomToDelete(null);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to delete room';
+      toast.error('Failed to delete room', msg);
     }
   };
 
@@ -194,10 +210,10 @@ export default function RoomsManagementPage() {
         {/* ─── Breadcrumb & Top Bar ────────────────────────────── */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
-            <div className="flex items-center gap-2 text-xs text-slate-400">
+            <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
               <Link
                 href="/dashboard"
-                className="hover:text-slate-200 transition-colors flex items-center gap-1"
+                className="hover:text-[var(--text-main)] transition-colors flex items-center gap-1"
               >
                 <Home className="h-3.5 w-3.5" />
                 Dashboard
@@ -205,19 +221,19 @@ export default function RoomsManagementPage() {
               <span>/</span>
               <Link
                 href={`/properties/${propertyId}`}
-                className="hover:text-slate-200 transition-colors flex items-center gap-1"
+                className="hover:text-[var(--text-main)] transition-colors flex items-center gap-1"
               >
                 <Building className="h-3.5 w-3.5" />
                 {property?.name || 'Property'}
               </Link>
               <span>/</span>
-              <span className="font-semibold text-white">Rooms & Beds</span>
+              <span className="font-semibold text-[var(--text-main)]">Rooms & Beds</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight flex items-center gap-3">
-              <BedDouble className="h-7 w-7 text-emerald-400" />
+            <h1 className="text-2xl sm:text-3xl font-black text-[var(--text-main)] tracking-tight flex items-center gap-3">
+              <BedDouble className="h-7 w-7 text-emerald-600 dark:text-emerald-400" />
               Rooms & Beds
             </h1>
-            <p className="text-xs sm:text-sm text-slate-400">
+            <p className="text-xs sm:text-sm text-[var(--text-muted)]">
               Manage inventory, bed allocations, and monitor real-time occupancy.
             </p>
           </div>
@@ -225,45 +241,45 @@ export default function RoomsManagementPage() {
           {/* Add Room Primary CTA */}
           <Button
             onClick={() => setIsAddRoomOpen(true)}
-            className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl shadow-lg shadow-emerald-950/40 flex items-center gap-2 self-start sm:self-auto h-11 px-5"
+            className="btn-gold-primary rounded-xl shadow-md flex items-center gap-2 self-start sm:self-auto h-11 px-5"
           >
             <Plus className="h-4 w-4" />
             Add Room
           </Button>
         </div>
 
-        {/* ─── 2-Card Metrics Row (Matching Mobile PropertyScreen) ─── */}
+        {/* ─── 2-Card Metrics Row ──────────────────────────────────── */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Left Card: Vacant Room & Room Full */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 backdrop-blur-md shadow-lg flex flex-col justify-between">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800/80">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+          <div className="rounded-2xl border border-[var(--border-main)] bg-[var(--bg-card)] p-5 shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between pb-3 border-b border-[var(--border-main)]">
+              <span className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">
                 Room Status
               </span>
-              <span className="text-xs text-slate-500 font-medium">
+              <span className="text-xs text-[var(--text-muted)] font-medium">
                 {stats.totalRooms} Total Rooms
               </span>
             </div>
 
             <div className="grid grid-cols-2 gap-4 pt-4">
               {/* Vacant Room Pill */}
-              <div className="flex items-center justify-between p-3.5 rounded-xl border border-emerald-500/20 bg-emerald-500/5">
+              <div className="flex items-center justify-between p-3.5 rounded-xl border border-emerald-200 dark:border-emerald-500/25 bg-emerald-50/70 dark:bg-emerald-500/10">
                 <div>
-                  <p className="text-xs font-semibold text-slate-300">Vacant Room</p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">Ready for booking</p>
+                  <p className="text-xs font-bold text-emerald-800 dark:text-[var(--text-main)]">Vacant Room</p>
+                  <p className="text-[11px] text-emerald-700/80 dark:text-[var(--text-muted)] mt-0.5">Ready for booking</p>
                 </div>
-                <div className="flex h-9 min-w-9 px-2.5 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-300 font-black text-base">
+                <div className="flex h-9 min-w-9 px-2.5 items-center justify-center rounded-xl bg-emerald-600 text-white font-black text-base shadow-sm dark:bg-emerald-500/20 dark:text-emerald-300">
                   {stats.vacantRooms}
                 </div>
               </div>
 
               {/* Room Full Pill */}
-              <div className="flex items-center justify-between p-3.5 rounded-xl border border-rose-500/20 bg-rose-500/5">
+              <div className="flex items-center justify-between p-3.5 rounded-xl border border-rose-200 dark:border-rose-500/25 bg-rose-50/70 dark:bg-rose-500/10">
                 <div>
-                  <p className="text-xs font-semibold text-slate-300">Room Full</p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">100% Occupied</p>
+                  <p className="text-xs font-bold text-rose-800 dark:text-[var(--text-main)]">Room Full</p>
+                  <p className="text-[11px] text-rose-700/80 dark:text-[var(--text-muted)] mt-0.5">100% Occupied</p>
                 </div>
-                <div className="flex h-9 min-w-9 px-2.5 items-center justify-center rounded-xl bg-rose-500/20 text-rose-300 font-black text-base">
+                <div className="flex h-9 min-w-9 px-2.5 items-center justify-center rounded-xl bg-rose-600 text-white font-black text-base shadow-sm dark:bg-rose-500/20 dark:text-rose-300">
                   {stats.occupiedRooms}
                 </div>
               </div>
@@ -271,40 +287,40 @@ export default function RoomsManagementPage() {
           </div>
 
           {/* Right Card: Beds Vacant & Occupancy Rate */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 backdrop-blur-md shadow-lg flex flex-col justify-between">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800/80">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+          <div className="rounded-2xl border border-[var(--border-main)] bg-[var(--bg-card)] p-5 shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between pb-3 border-b border-[var(--border-main)]">
+              <span className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">
                 Bed Capacity
               </span>
-              <span className="text-xs text-slate-500 font-medium">
+              <span className="text-xs text-[var(--text-muted)] font-medium">
                 {stats.totalBeds} Total Beds
               </span>
             </div>
 
             <div className="grid grid-cols-2 gap-4 pt-4">
               {/* Beds Vacant Pill */}
-              <div className="flex items-center justify-between p-3.5 rounded-xl border border-emerald-500/20 bg-emerald-500/5">
+              <div className="flex items-center justify-between p-3.5 rounded-xl border border-emerald-200 dark:border-emerald-500/25 bg-emerald-50/70 dark:bg-emerald-500/10">
                 <div>
-                  <p className="text-xs font-semibold text-slate-300">Beds Vacant</p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">Available beds</p>
+                  <p className="text-xs font-bold text-emerald-800 dark:text-[var(--text-main)]">Beds Vacant</p>
+                  <p className="text-[11px] text-emerald-700/80 dark:text-[var(--text-muted)] mt-0.5">Available beds</p>
                 </div>
-                <div className="flex h-9 min-w-9 px-2.5 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-300 font-black text-base">
+                <div className="flex h-9 min-w-9 px-2.5 items-center justify-center rounded-xl bg-emerald-600 text-white font-black text-base shadow-sm dark:bg-emerald-500/20 dark:text-emerald-300">
                   {stats.vacantBeds}
                 </div>
               </div>
 
               {/* Occupancy Pill with Progress */}
-              <div className="flex items-center justify-between p-3.5 rounded-xl border border-sky-500/20 bg-sky-500/5">
+              <div className="flex items-center justify-between p-3.5 rounded-xl border border-sky-200 dark:border-sky-500/25 bg-sky-50/70 dark:bg-sky-500/10">
                 <div>
-                  <p className="text-xs font-semibold text-slate-300">Occupancy</p>
-                  <div className="w-16 h-1.5 bg-slate-800 rounded-full mt-1.5 overflow-hidden">
+                  <p className="text-xs font-bold text-sky-800 dark:text-[var(--text-main)]">Occupancy</p>
+                  <div className="w-16 h-1.5 bg-sky-100 dark:bg-slate-800 rounded-full mt-1.5 overflow-hidden border border-sky-200/60 dark:border-transparent">
                     <div
-                      className="h-full bg-sky-400 rounded-full transition-all duration-500"
+                      className="h-full bg-sky-500 rounded-full transition-all duration-500"
                       style={{ width: `${stats.occupancyRate}%` }}
                     />
                   </div>
                 </div>
-                <div className="flex h-9 min-w-9 px-2.5 items-center justify-center rounded-xl bg-sky-500/20 text-sky-300 font-black text-base">
+                <div className="flex h-9 min-w-9 px-2.5 items-center justify-center rounded-xl bg-sky-600 text-white font-black text-base shadow-sm dark:bg-sky-500/20 dark:text-sky-300">
                   {stats.occupancyRate}%
                 </div>
               </div>
@@ -314,14 +330,14 @@ export default function RoomsManagementPage() {
 
         {/* ─── Controls: Search & Segmented Filters ────────────── */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pt-2">
-          {/* Segmented Filter Control (Matching mobile All | Vacant | Occupied) */}
-          <div className="flex items-center p-1 rounded-xl bg-slate-900 border border-slate-800 self-start">
+          {/* Segmented Filter Control */}
+          <div className="flex items-center p-1 rounded-xl bg-[var(--bg-card)] border border-[var(--border-main)] shadow-sm self-start">
             <button
               onClick={() => setActiveTab('all')}
               className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
                 activeTab === 'all'
-                  ? 'bg-slate-800 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-[var(--bg-card-subtle)] text-[var(--text-main)] border border-[var(--border-main)] shadow-sm'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
               }`}
             >
               All Rooms ({allRooms.length})
@@ -330,8 +346,8 @@ export default function RoomsManagementPage() {
               onClick={() => setActiveTab('vacant')}
               className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
                 activeTab === 'vacant'
-                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shadow-sm'
-                  : 'text-slate-400 hover:text-emerald-300'
+                  ? 'bg-emerald-500/15 text-emerald-800 border border-emerald-500/30 shadow-sm dark:text-emerald-300'
+                  : 'text-[var(--text-muted)] hover:text-emerald-600 dark:hover:text-emerald-300'
               }`}
             >
               Vacant
@@ -340,8 +356,8 @@ export default function RoomsManagementPage() {
               onClick={() => setActiveTab('occupied')}
               className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
                 activeTab === 'occupied'
-                  ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30 shadow-sm'
-                  : 'text-slate-400 hover:text-rose-300'
+                  ? 'bg-rose-500/15 text-rose-800 border border-rose-500/30 shadow-sm dark:text-rose-300'
+                  : 'text-[var(--text-muted)] hover:text-rose-600 dark:hover:text-rose-300'
               }`}
             >
               Occupied
@@ -355,7 +371,7 @@ export default function RoomsManagementPage() {
                 <select
                   value={selectedFloor}
                   onChange={(e) => setSelectedFloor(e.target.value)}
-                  className="appearance-none bg-slate-900 border border-slate-800 text-slate-200 text-xs font-medium rounded-xl pl-3.5 pr-8 py-2.5 focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer"
+                  className="appearance-none bg-[var(--bg-card)] border border-[var(--border-main)] text-[var(--text-main)] text-xs font-medium rounded-xl pl-3.5 pr-8 py-2.5 focus:outline-none focus:ring-1 focus:ring-[var(--gold)] cursor-pointer shadow-sm"
                 >
                   <option value="all">All Floors</option>
                   {availableFloors.map((floor) => (
@@ -364,23 +380,23 @@ export default function RoomsManagementPage() {
                     </option>
                   ))}
                 </select>
-                <ChevronDown className="absolute right-2.5 top-3 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+                <ChevronDown className="absolute right-2.5 top-3 h-3.5 w-3.5 text-[var(--text-muted)] pointer-events-none" />
               </div>
             )}
 
             {/* Pill Search Bar */}
             <div className="relative flex-1 sm:w-64">
-              <Search className="absolute left-3.5 top-2.5 h-4 w-4 text-slate-500" />
+              <Search className="absolute left-3.5 top-2.5 h-4 w-4 text-[var(--text-muted)]" />
               <Input
                 placeholder="Search room, floor..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 pr-8 h-10 rounded-xl bg-slate-900 border-slate-800 text-xs text-white placeholder:text-slate-500 focus-visible:ring-emerald-500"
+                className="pl-9 pr-8 h-10 rounded-xl bg-[var(--bg-card)] border-[var(--border-main)] text-xs text-[var(--text-main)] placeholder:text-[var(--text-muted)] focus-visible:ring-[var(--gold)] shadow-sm"
               />
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-2.5 top-2.5 text-slate-400 hover:text-white"
+                  className="absolute right-2.5 top-2.5 text-[var(--text-muted)] hover:text-[var(--text-main)]"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -436,8 +452,8 @@ export default function RoomsManagementPage() {
                 key={room._id}
                 room={room}
                 propertyId={propertyId}
-                onDelete={handleDeleteRoom}
-                deleting={deleteRoomMutation.isPending}
+                onDelete={(id, roomNum) => setRoomToDelete({ id, roomNumber: roomNum })}
+                deleting={deleteRoomMutation.isPending && roomToDelete?.id === room._id}
               />
             ))}
           </div>
@@ -449,6 +465,18 @@ export default function RoomsManagementPage() {
           onOpenChange={setIsAddRoomOpen}
           onSubmit={handleCreateRoom}
           isPending={createRoomMutation.isPending}
+        />
+
+        {/* Confirm Delete Room Dialog */}
+        <ConfirmDialog
+          open={!!roomToDelete}
+          onOpenChange={(open) => !open && setRoomToDelete(null)}
+          title={`Delete Room ${roomToDelete?.roomNumber}?`}
+          description="Are you sure you want to delete this room and its bed inventory? This action cannot be undone."
+          confirmText="Delete Room"
+          variant="danger"
+          isPending={deleteRoomMutation.isPending}
+          onConfirm={handleConfirmDelete}
         />
       </div>
     </DashboardLayout>

@@ -278,21 +278,25 @@ function SettingsForm({ propertyId, initialSettings }: SettingsFormProps) {
   );
 }
 
+import { EditPropertyForm } from '@/features/properties/components/EditPropertyForm';
+import { Building2 } from 'lucide-react';
+
 export default function PropertySettingsPage() {
   const params = useParams();
   const propertyId = params.propertyId as string;
+  const [activeTab, setActiveTab] = useState<'profile' | 'billing'>('profile');
 
   const { data, isLoading } = useQuery({
     queryKey: ['rent-settings', propertyId],
     queryFn: () => rentApi.getRentSettings(propertyId),
-    enabled: !!propertyId,
+    enabled: !!propertyId && activeTab === 'billing',
   });
 
   return (
     <DashboardLayout propertyId={propertyId}>
       <PageHeader
         title="Property & Rent Settings"
-        description="Configure billing cycles, automated WhatsApp reminder intervals, and rent collection bank details."
+        description="Manage property profile, contact info, amenities, billing cycles, and rent collection rules."
         breadcrumbs={[
           { label: 'Properties', href: '/dashboard' },
           { label: 'Overview', href: `/properties/${propertyId}` },
@@ -300,18 +304,49 @@ export default function PropertySettingsPage() {
         ]}
       />
 
-      {isLoading ? (
-        <div className="mt-8 max-w-3xl space-y-6">
-          <Skeleton className="h-48 rounded-2xl" />
-          <Skeleton className="h-48 rounded-2xl" />
-        </div>
-      ) : (
-        <SettingsForm
-          key={propertyId}
-          propertyId={propertyId}
-          initialSettings={data?.data}
-        />
-      )}
+      {/* Tabs */}
+      <div className="mt-6 flex border-b border-slate-800 gap-2">
+        <button
+          onClick={() => setActiveTab('profile')}
+          className={`flex items-center gap-2 pb-3 px-3 text-xs font-semibold border-b-2 transition-all ${
+            activeTab === 'profile'
+              ? 'border-emerald-500 text-emerald-400'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <Building2 className="h-4 w-4" />
+          Property Profile & Details
+        </button>
+
+        <button
+          onClick={() => setActiveTab('billing')}
+          className={`flex items-center gap-2 pb-3 px-3 text-xs font-semibold border-b-2 transition-all ${
+            activeTab === 'billing'
+              ? 'border-emerald-500 text-emerald-400'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <Receipt className="h-4 w-4" />
+          Billing & Rent Settings
+        </button>
+      </div>
+
+      <div className="mt-6">
+        {activeTab === 'profile' ? (
+          <EditPropertyForm propertyId={propertyId} />
+        ) : isLoading ? (
+          <div className="max-w-3xl space-y-6">
+            <Skeleton className="h-48 rounded-2xl" />
+            <Skeleton className="h-48 rounded-2xl" />
+          </div>
+        ) : (
+          <SettingsForm
+            key={propertyId}
+            propertyId={propertyId}
+            initialSettings={data?.data}
+          />
+        )}
+      </div>
     </DashboardLayout>
   );
 }

@@ -1,0 +1,246 @@
+/* ==========================================================================
+   PG Management — Production Theme System
+   Light Theme: Bespoke Gold / Ink / Paper Design System (Warm Luxury Aesthetic)
+   Dark Theme: Sleek Deep Slate & Emerald Glow System
+   ========================================================================== */
+
+/* ─── Light Theme Tokens (Design System Spec) ────────────────────────────── */
+:root[data-theme='light'],
+[data-theme='light'] {
+  --gold: #b8893f;
+  --gold-strong: #9a6f2c;
+  --gold-bright: #d4af37;
+  --gold-light: #e9d7a7;
+  --gold-pale: #faf3e0;
+  --gold-gradient: linear-gradient(135deg, #d4af37 0%, #b8893f 45%, #8f6b27 100%);
+  --ink: #211c16;
+  --ink-2: #40362a;
+  --muted: #8d8477;
+  --silver: #c9c4bb;
+  --silver-2: #eae6de;
+  --paper: #f6f3ec;
+  --card: #ffffff;
+  --card-subtle: #faf7f2;
+  --line: #ece7dc;
+  --line-strong: #ded8cb;
+  --rose: #b3261e;
+  --rose-bg: #fef2f2;
+  --rose-border: #fecaca;
+  --emerald-accent: #166534;
+  --emerald-accent-bg: #f0fdf4;
+  --emerald-accent-border: #bbf7d0;
+
+  /* Semantic Theme Mappings */
+  --bg-app: var(--paper);
+  --bg-card: var(--card);
+  --bg-card-subtle: var(--card-subtle);
+  --bg-input: #ffffff;
+  --bg-sidebar: #ffffff;
+  --bg-header: rgba(255, 255, 255, 0.92);
+  --text-main: var(--ink);
+  --text-sub: var(--ink-2);
+  --text-muted: var(--muted);
+  --border-main: var(--line);
+  --border-strong: var(--line-strong);
+  --border-focus: var(--gold);
+  --primary-accent: var(--gold);
+  --primary-accent-hover: var(--gold-strong);
+  --shadow-card: 0 4px 20px -2px rgba(33, 28, 22, 0.06), 0 2px 6px -1px rgba(33, 28, 22, 0.03);
+}
+
+/* ─── Dark Theme Tokens (Existing App Design System) ─────────────────────── */
+:root,
+:root[data-theme='dark'],
+[data-theme='dark'] {
+  --gold: #d4af37;
+  --gold-strong: #b8893f;
+  --gold-bright: #f0cc52;
+  --gold-light: #524223;
+  --gold-pale: #2a2212;
+  --gold-gradient: linear-gradient(135deg, #d4af37 0%, #b8893f 45%, #8f6b27 100%);
+  --ink: #f8fafc;
+  --ink-2: #cbd5e1;
+  --muted: #94a3b8;
+  --silver: #475569;
+  --silver-2: #334155;
+  --paper: #080c14;
+  --card: #0f172a;
+  --card-subtle: #131d36;
+  --line: #1e293b;
+  --line-strong: #334155;
+  --rose: #f43f5e;
+  --rose-bg: rgba(244, 63, 94, 0.12);
+  --rose-border: rgba(244, 63, 94, 0.25);
+  --emerald-accent: #10b981;
+  --emerald-accent-bg: rgba(16, 185, 129, 0.12);
+  --emerald-accent-border: rgba(16, 185, 129, 0.25);
+
+  /* Semantic Theme Mappings */
+  --bg-app: #080c14;
+  --bg-card: rgba(15, 23, 42, 0.85);
+  --bg-card-subtle: rgba(19, 29, 54, 0.7);
+  --bg-input: rgba(15, 23, 42, 0.9);
+  --bg-sidebar: #090e1a;
+  --bg-header: rgba(9, 14, 26, 0.85);
+  --text-main: #f8fafc;
+  --text-sub: #cbd5e1;
+  --text-muted: #94a3b8;
+  --border-main: rgba(30, 41, 59, 0.8);
+  --border-strong: #334155;
+  --border-focus: #10b981;
+  --primary-accent: #10b981;
+  --primary-accent-hover: #059669;
+  --shadow-card: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+}
+
+/* ─── Global Base Theme Rules ─────────────────────────────────────────────── */
+body {
+  background-color: var(--bg-app);
+  color: var(--text-main);
+}
+
+/* ─── Light Mode Specific Refinements ─────────────────────────────────────── */
+[data-theme='light'] body {
+  background-color: var(--paper) !important;
+  color: var(--ink) !important;
+}
+
+/* Header in Light Mode */
+[data-theme='light'] header {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+  border-bottom: 1px solid var(--line) !important;
+  box-shadow: 0 1px 3px 0 rgba(33, 28, 22, 0.04);
+}
+
+/* Sidebar in Light Mode */
+[data-theme='light'] aside {
+  background-color: #ffffff !important;
+  border-right: 1px solid var(--line) !important;
+}
+
+[data-theme='light'] aside a,
+[data-theme='light'] aside button {
+  color: var(--ink-2);
+}
+
+[data-theme='light'] aside a:hover,
+[data-theme='light'] aside button:hover {
+  background-color: var(--gold-pale);
+  color: var(--gold-strong);
+}
+
+[data-theme='light'] aside a[data-active='true'] {
+  background: var(--gold-pale) !important;
+  color: var(--gold-strong) !important;
+  border-color: var(--gold-light) !important;
+  font-weight: 700;
+}
+
+/* Cards & Panels in Light Mode */
+[data-theme='light'] .theme-card,
+[data-theme='light'] .bg-slate-900,
+[data-theme='light'] .bg-slate-900\/40,
+[data-theme='light'] .bg-slate-900\/60,
+[data-theme='light'] .bg-slate-900\/70,
+[data-theme='light'] .bg-slate-900\/80,
+[data-theme='light'] .bg-slate-900\/90 {
+  background-color: var(--card) !important;
+  border-color: var(--line) !important;
+  box-shadow: var(--shadow-card);
+}
+
+/* Subtle / Nested Containers in Light Mode */
+[data-theme='light'] .theme-subtle,
+[data-theme='light'] .bg-slate-950,
+[data-theme='light'] .bg-slate-950\/40,
+[data-theme='light'] .bg-slate-950\/50,
+[data-theme='light'] .bg-slate-950\/60,
+[data-theme='light'] .bg-slate-950\/70,
+[data-theme='light'] .bg-slate-950\/80 {
+  background-color: var(--card-subtle) !important;
+  border-color: var(--line) !important;
+}
+
+/* Borders in Light Mode */
+[data-theme='light'] .border-slate-800,
+[data-theme='light'] .border-slate-800\/60,
+[data-theme='light'] .border-slate-800\/80,
+[data-theme='light'] .border-slate-800\/90,
+[data-theme='light'] .border-slate-700 {
+  border-color: var(--line) !important;
+}
+
+/* Typography Headings in Light Mode */
+[data-theme='light'] h1:not(.keep-white),
+[data-theme='light'] h2:not(.keep-white),
+[data-theme='light'] h3:not(.keep-white),
+[data-theme='light'] h4:not(.keep-white) {
+  color: var(--ink) !important;
+}
+
+/* Inputs & Form Controls in Light Mode */
+[data-theme='light'] input,
+[data-theme='light'] select,
+[data-theme='light'] textarea {
+  background-color: #ffffff !important;
+  color: var(--ink) !important;
+  border-color: var(--line) !important;
+}
+
+[data-theme='light'] input::placeholder,
+[data-theme='light'] textarea::placeholder {
+  color: var(--silver) !important;
+}
+
+[data-theme='light'] input:focus,
+[data-theme='light'] select:focus,
+[data-theme='light'] textarea:focus {
+  border-color: var(--gold) !important;
+  box-shadow: 0 0 0 2px var(--gold-pale) !important;
+}
+
+/* Dialogs & Popovers in Light Mode */
+[data-theme='light'] [role='dialog'],
+[data-theme='light'] [data-radix-popper-content-wrapper] > div {
+  background-color: #ffffff !important;
+  color: var(--ink) !important;
+  border-color: var(--line) !important;
+  box-shadow: 0 20px 25px -5px rgba(33, 28, 22, 0.08), 0 8px 10px -6px rgba(33, 28, 22, 0.04) !important;
+}
+
+/* ─── Hero Card Styling in Light Mode ─────────────────────────────────────── */
+[data-theme='light'] .theme-hero-card {
+  background: linear-gradient(135deg, #ffffff 0%, #faf7f2 50%, #f5efe4 100%) !important;
+  border: 1px solid var(--line-strong) !important;
+  box-shadow: var(--shadow-card);
+}
+
+[data-theme='dark'] .theme-hero-card {
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(15, 23, 42, 0.6) 50%, #090e1a 100%) !important;
+  border: 1px solid #1e293b !important;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+}
+
+/* ─── Occupant Detail Box in BedCard ──────────────────────────────────────── */
+[data-theme='light'] .theme-occupant-box {
+  background-color: #faf6f2 !important;
+  border: 1px solid #ece4d8 !important;
+}
+
+[data-theme='dark'] .theme-occupant-box {
+  background-color: rgba(9, 14, 26, 0.6) !important;
+  border: 1px solid rgba(30, 41, 59, 0.8) !important;
+}
+
+/* ─── Gold Theme Utilities ────────────────────────────────────────────────── */
+.btn-gold-primary {
+  background: var(--gold);
+  color: #ffffff !important;
+  font-weight: 600;
+  transition: all 0.15s ease;
+}
+
+.btn-gold-primary:hover {
+  background: var(--gold-strong);
+  color: #ffffff !important;
+}

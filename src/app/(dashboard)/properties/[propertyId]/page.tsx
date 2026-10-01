@@ -78,14 +78,22 @@ export default function PropertyOverviewPage() {
           { label: property?.name || 'Property', href: `/properties/${propertyId}` },
         ]}
       >
+        <Link href={`/properties/${propertyId}/edit`}>
+          <Button variant="outline" size="sm" className="rounded-xl border-slate-700">
+            <TrendingUp className="h-4 w-4 mr-1.5 hidden" />
+            <span className="flex items-center gap-1.5">
+              <span>Edit Property</span>
+            </span>
+          </Button>
+        </Link>
         <Link href={`/properties/${propertyId}/rooms`}>
-          <Button variant="outline" size="sm">
+          <Button variant="outline" size="sm" className="rounded-xl border-slate-700">
             <BedDouble className="h-4 w-4 mr-1.5" />
             Rooms & Beds
           </Button>
         </Link>
-        <Link href={`/properties/${propertyId}/tenants`}>
-          <Button size="sm">
+        <Link href={`/properties/${propertyId}/tenants/new`}>
+          <Button size="sm" className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold">
             <Plus className="h-4 w-4 mr-1" />
             Add Tenant
           </Button>

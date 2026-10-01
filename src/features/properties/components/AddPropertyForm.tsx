@@ -24,7 +24,7 @@ import {
 import { useAuthStore } from '@/lib/auth/store';
 import { propertyApi } from '../api/property.api';
 import { GoogleAddressAutocomplete } from '@/components/maps/GoogleAddressAutocomplete';
-import { GoogleMapPicker } from '@/components/maps/GoogleMapPicker';
+import { toast } from '@/components/ui/toast';
 import {
   cleanPhoneNumber,
   sanitizeMapsUrl,
@@ -165,7 +165,7 @@ export function AddPropertyForm({
     // 2. Address / Search
     if (!form.address || form.address.trim().length < 5) {
       if (!form.area || form.area.trim().length < 2) {
-        errs.address = 'Please search and select the address from Google Maps.';
+        errs.address = 'Complete street address is required.';
       }
     }
 
@@ -291,6 +291,7 @@ export function AddPropertyForm({
           : {};
       const newPropertyId = String(propertyObj._id || propertyObj.id || '');
 
+      toast.success('Property Created Successfully', 'Redirecting to your new property dashboard...');
       setSuccessMessage('🎉 Property Created Successfully! Redirecting...');
 
       setTimeout(() => {
@@ -301,13 +302,14 @@ export function AddPropertyForm({
         } else {
           router.push('/dashboard');
         }
-      }, 1200);
+      }, 1000);
     } catch (err: unknown) {
       console.error('Create Property Error:', err);
       let msg = 'Failed to create property. Please verify the details and try again.';
       if (err instanceof Error) {
         msg = err.message;
       }
+      toast.error('Creation Failed', msg);
       setSubmitError(msg);
     } finally {
       setSubmitting(false);
@@ -483,17 +485,6 @@ export function AddPropertyForm({
             />
             {errors.city && <p className="mt-1 text-xs text-rose-400">{errors.city}</p>}
           </div>
-        </div>
-
-        {/* Interactive Google Map Pin Dropper */}
-        <div>
-          <GoogleMapPicker
-            latitude={form.latitude}
-            longitude={form.longitude}
-            address={form.address}
-            onLocationChange={handleSelectAddress}
-            height="260px"
-          />
         </div>
 
         {/* Google Maps link (optional) */}

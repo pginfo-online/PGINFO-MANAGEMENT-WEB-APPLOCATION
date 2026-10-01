@@ -27,6 +27,7 @@ export interface AssignResidentPayload {
   phone: string;
   joinDate: string;
   monthlyRent?: number;
+  securityDeposit?: number;
 }
 
 export interface VacateBedPayload {
@@ -143,41 +144,38 @@ export const roomsApi = {
   updateBed: (bedId: string, payload: UpdateBedPayload) =>
     apiClient.put<Bed>(`/manage/beds/${bedId}`, payload),
 
-  // Quick assign resident to a bed
+  // Quick assign resident to a bed via official tenant onboarding API
   assignResident: async (
     pgId: string,
     roomId: string,
     bedId: string,
     tenantData: AssignResidentPayload
   ) => {
-    // Try the assign-tenant endpoint first
-    try {
-      return await apiClient.post<{ success: boolean }>(
-        `/manage/pgs/${pgId}/rooms/${roomId}/beds/${bedId}/assign`,
-        tenantData
-      );
-    } catch {
-      // Fallback: mark bed as occupied via updateBed
-      return await apiClient.put<Bed>(`/manage/beds/${bedId}`, {
-        status: 'occupied',
-        notes: `Assigned: ${tenantData.name} (${tenantData.phone}) on ${tenantData.joinDate}`,
-      });
-    }
+    return await apiClient.post(`/manage/pgs/${pgId}/tenants`, {
+      name: tenantData.name.trim(),
+      phone: tenantData.phone.trim(),
+      joinDate: tenantData.joinDate,
+      monthlyRent: Number(tenantData.monthlyRent) || 0,
+      securityDeposit: Number(tenantData.securityDeposit) || 0,
+      bedId,
+      bed: bedId,
+      roomId,
+      room: roomId,
+    });
   },
 
-  // Vacate a bed
+  // Vacate a bed via official tenant vacate API
   vacateBed: async (pgId: string, roomId: string, bedId: string, tenantId?: string) => {
-    try {
-      return await apiClient.post<{ success: boolean }>(
-        `/manage/pgs/${pgId}/rooms/${roomId}/beds/${bedId}/vacate`,
-        tenantId ? { tenantId } : {}
-      );
-    } catch {
-      // Fallback: mark bed as vacant
-      return await apiClient.put<Bed>(`/manage/beds/${bedId}`, {
-        status: 'vacant',
-        notes: undefined,
-      });
+    if (tenantId) {
+      return await apiClient.post(`/manage/tenants/${tenantId}/vacate`, {});
     }
+    return await apiClient.put<Bed>(`/manage/beds/${bedId}`, {
+      status: 'vacant',
+      notes: undefined,
+    });
   },
+
+  // Update room photo directly
+  uploadRoomPhoto: (roomId: string, image: string, imagePublicId?: string) =>
+    apiClient.put<Room>(`/manage/rooms/${roomId}`, { image, imagePublicId }),
 };

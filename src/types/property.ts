@@ -154,6 +154,7 @@ export interface Room {
   hasMeter?: boolean;
   floorLabel?: FloorLabel;
   image?: string | null;
+  imagePublicId?: string | null;
   notes?: string;
   beds?: Bed[];
   createdAt: string;
@@ -218,27 +219,38 @@ export interface CreatePGRoomPayload {
   totalBeds?: number;
   deposit?: number;
   depositAmount?: number;
+  roomSize?: string;
   ac?: boolean;
   acIncluded?: boolean;
   attachedBathroom?: boolean;
   bathroomType?: BathroomType;
   hasMeter?: boolean;
   amenities?: string[];
+  notes?: string;
+  image?: string | null;
+  imagePublicId?: string | null;
 }
 
 export interface UpdateRoomPayload extends Partial<CreateRoomPayload> {
+  roomNumber?: string;
   status?: RoomStatus;
   floorLabel?: FloorLabel;
   rent?: number;
   rentPerBed?: number;
   monthlyRent?: number;
   totalBeds?: number;
+  depositAmount?: number;
+  deposit?: number;
+  roomSize?: string;
   ac?: boolean;
   acIncluded?: boolean;
   attachedBathroom?: boolean;
   bathroomType?: BathroomType;
   hasMeter?: boolean;
   amenities?: string[];
+  notes?: string;
+  image?: string | null;
+  imagePublicId?: string | null;
 }
 
 export interface UpdateBedPayload {

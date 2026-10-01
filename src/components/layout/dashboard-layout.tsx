@@ -43,7 +43,7 @@ export function DashboardLayout({ children, propertyId }: DashboardLayoutProps) 
   }
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[#080c14] text-slate-100">
+    <div className="flex h-screen w-screen overflow-hidden bg-[var(--bg-app)] text-[var(--text-main)] transition-colors duration-200">
       {/* Desktop Sidebar */}
       <div className="hidden md:flex md:flex-shrink-0">
         <Sidebar propertyId={propertyId} />
@@ -53,10 +53,10 @@ export function DashboardLayout({ children, propertyId }: DashboardLayoutProps) 
       {mobileMenuOpen && (
         <div className="fixed inset-0 z-50 flex md:hidden">
           <div
-            className="fixed inset-0 bg-black/70 backdrop-blur-sm transition-opacity"
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity"
             onClick={() => setMobileMenuOpen(false)}
           />
-          <div className="relative flex w-64 flex-col bg-slate-950 shadow-2xl">
+          <div className="relative flex w-64 flex-col bg-[var(--bg-card)] shadow-2xl">
             <Sidebar
               propertyId={propertyId}
               onCloseMobile={() => setMobileMenuOpen(false)}
@@ -66,12 +66,12 @@ export function DashboardLayout({ children, propertyId }: DashboardLayoutProps) 
       )}
 
       {/* Main Content Area */}
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex flex-1 flex-col overflow-hidden bg-[var(--bg-app)]">
         <Header
           propertyId={propertyId}
           onOpenMobileMenu={() => setMobileMenuOpen(true)}
         />
-        <main className="flex-1 overflow-y-auto px-4 py-6 md:px-8 md:py-8">
+        <main className="flex-1 overflow-y-auto px-4 py-6 md:px-8 md:py-8 bg-[var(--bg-app)]">
           <div className="mx-auto max-w-7xl">{children}</div>
         </main>
       </div>

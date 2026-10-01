@@ -6,6 +6,36 @@ const nextConfig: NextConfig = {
   compiler: {
     removeConsole: process.env.NODE_ENV === 'production' ? { exclude: ['error'] } : false,
   },
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'res.cloudinary.com',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: '**.cloudinary.com',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'images.unsplash.com',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'lh3.googleusercontent.com',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: '**.googleusercontent.com',
+        pathname: '/**',
+      },
+    ],
+  },
 };
 
 export default nextConfig;
+

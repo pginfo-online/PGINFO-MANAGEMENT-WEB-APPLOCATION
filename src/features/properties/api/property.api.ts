@@ -53,6 +53,45 @@ export const propertyApi = {
     }
   },
 
+  getProperty: async (id: string) => {
+    try {
+      const res = await apiClient.get<{ property?: Record<string, unknown>; pg?: Record<string, unknown> }>(`/properties/${id}`);
+      return (res.data?.property || res.data?.pg || res.data) as Record<string, unknown>;
+    } catch {
+      const res = await apiClient.get<{ property?: Record<string, unknown>; pg?: Record<string, unknown> }>(`/pg/${id}`);
+      return (res.data?.pg || res.data?.property || res.data) as Record<string, unknown>;
+    }
+  },
+
+  updateProperty: async (id: string, payload: Record<string, unknown>) => {
+    try {
+      return await apiClient.put<{ property?: Record<string, unknown>; pg?: Record<string, unknown> }>(
+        `/properties/${id}`,
+        payload
+      );
+    } catch (err: unknown) {
+      console.warn('[propertyApi.updateProperty] /properties failed, attempting /pg fallback:', err);
+      return await apiClient.put<{ property?: Record<string, unknown>; pg?: Record<string, unknown> }>(
+        `/pg/${id}`,
+        payload
+      );
+    }
+  },
+
+  deleteProperty: async (id: string) => {
+    try {
+      return await apiClient.delete(`/properties/${id}`);
+    } catch {
+      return await apiClient.delete(`/pg/${id}`);
+    }
+  },
+
+  deletePropertyPhoto: async (propertyId: string, publicId: string) => {
+    return await apiClient.delete(`/upload/image/${propertyId}`, {
+      body: JSON.stringify({ publicId }),
+    });
+  },
+
   getAvailability: (pgId: string) =>
     apiClient.get<Record<string, unknown>>(`/manage/pgs/${pgId}/availability`),
 

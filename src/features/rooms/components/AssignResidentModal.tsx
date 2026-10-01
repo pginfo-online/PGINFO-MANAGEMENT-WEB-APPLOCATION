@@ -100,18 +100,18 @@ export function AssignResidentModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md bg-slate-900 border-slate-800 text-white shadow-2xl p-0 overflow-hidden rounded-2xl">
-        <DialogHeader className="p-6 pb-4 border-b border-slate-800/80 bg-slate-950/40">
+      <DialogContent className="max-w-md bg-white dark:bg-slate-900 border border-[var(--border-main)] dark:border-slate-800 text-[var(--text-main)] dark:text-white shadow-2xl p-0 overflow-hidden rounded-2xl">
+        <DialogHeader className="p-6 pb-4 border-b border-[var(--border-main)] dark:border-slate-800/80 bg-[var(--bg-card-subtle)] dark:bg-slate-950/40">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 dark:bg-emerald-500/10 dark:border-emerald-500/20 dark:text-emerald-400">
               <BedDouble className="h-5 w-5" />
             </div>
             <div>
-              <DialogTitle className="text-lg font-bold text-white">
+              <DialogTitle className="text-lg font-bold text-[var(--text-main)] dark:text-white">
                 Assign Resident
               </DialogTitle>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Assigning to <span className="font-semibold text-emerald-400">{bedLabel}</span> in Room <span className="font-semibold text-white">{roomNumber}</span>
+              <p className="text-xs text-[var(--text-muted)] dark:text-slate-400 mt-0.5">
+                Assigning to <span className="font-bold text-emerald-700 dark:text-emerald-400">{bedLabel}</span> in Room <span className="font-bold text-[var(--text-main)] dark:text-white">{roomNumber}</span>
               </p>
             </div>
           </div>
@@ -120,29 +120,29 @@ export function AssignResidentModal({
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {/* Resident Name */}
           <div>
-            <label className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5 flex items-center gap-1.5">
-              <User className="h-3.5 w-3.5 text-slate-400" />
+            <label className="text-xs font-bold uppercase tracking-wider text-[var(--text-sub)] dark:text-slate-400 mb-1.5 flex items-center gap-1.5">
+              <User className="h-3.5 w-3.5 text-[var(--text-muted)]" />
               Resident Name *
             </label>
             <Input
               placeholder="e.g. Rahul Sharma"
               value={form.name}
               onChange={(e) => handleChange('name', e.target.value)}
-              className="bg-slate-950/60 border-slate-800 text-white placeholder:text-slate-600 focus-visible:ring-emerald-500 rounded-xl"
+              className="bg-white dark:bg-slate-950/60 border-[var(--border-main)] dark:border-slate-800 text-[var(--text-main)] dark:text-white placeholder:text-slate-400 focus-visible:ring-[var(--gold)] dark:focus-visible:ring-emerald-500 rounded-xl"
             />
             {errors.name && (
-              <p className="mt-1 text-xs text-rose-400">{errors.name}</p>
+              <p className="mt-1 text-xs text-rose-500 dark:text-rose-400">{errors.name}</p>
             )}
           </div>
 
           {/* Phone Number */}
           <div>
-            <label className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5 flex items-center gap-1.5">
-              <Phone className="h-3.5 w-3.5 text-slate-400" />
+            <label className="text-xs font-bold uppercase tracking-wider text-[var(--text-sub)] dark:text-slate-400 mb-1.5 flex items-center gap-1.5">
+              <Phone className="h-3.5 w-3.5 text-[var(--text-muted)]" />
               Phone Number *
             </label>
             <div className="relative">
-              <span className="absolute left-3 top-2.5 text-xs text-slate-500 font-mono font-medium">
+              <span className="absolute left-3 top-2.5 text-xs text-[var(--text-muted)] dark:text-slate-500 font-mono font-medium">
                 +91
               </span>
               <Input
@@ -150,35 +150,35 @@ export function AssignResidentModal({
                 value={form.phone}
                 onChange={(e) => handleChange('phone', e.target.value)}
                 maxLength={10}
-                className="pl-12 bg-slate-950/60 border-slate-800 text-white placeholder:text-slate-600 focus-visible:ring-emerald-500 rounded-xl font-mono"
+                className="pl-12 bg-white dark:bg-slate-950/60 border-[var(--border-main)] dark:border-slate-800 text-[var(--text-main)] dark:text-white placeholder:text-slate-400 focus-visible:ring-[var(--gold)] dark:focus-visible:ring-emerald-500 rounded-xl font-mono"
               />
             </div>
             {errors.phone && (
-              <p className="mt-1 text-xs text-rose-400">{errors.phone}</p>
+              <p className="mt-1 text-xs text-rose-500 dark:text-rose-400">{errors.phone}</p>
             )}
           </div>
 
           {/* Join Date & Monthly Rent */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5 flex items-center gap-1.5">
-                <Calendar className="h-3.5 w-3.5 text-slate-400" />
+              <label className="text-xs font-bold uppercase tracking-wider text-[var(--text-sub)] dark:text-slate-400 mb-1.5 flex items-center gap-1.5">
+                <Calendar className="h-3.5 w-3.5 text-[var(--text-muted)]" />
                 Check-in Date *
               </label>
               <Input
                 type="date"
                 value={form.joinDate}
                 onChange={(e) => handleChange('joinDate', e.target.value)}
-                className="bg-slate-950/60 border-slate-800 text-white placeholder:text-slate-600 focus-visible:ring-emerald-500 rounded-xl text-sm [color-scheme:dark]"
+                className="bg-white dark:bg-slate-950/60 border-[var(--border-main)] dark:border-slate-800 text-[var(--text-main)] dark:text-white placeholder:text-slate-400 focus-visible:ring-[var(--gold)] dark:focus-visible:ring-emerald-500 rounded-xl text-sm"
               />
               {errors.joinDate && (
-                <p className="mt-1 text-xs text-rose-400">{errors.joinDate}</p>
+                <p className="mt-1 text-xs text-rose-500 dark:text-rose-400">{errors.joinDate}</p>
               )}
             </div>
 
             <div>
-              <label className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5 flex items-center gap-1.5">
-                <IndianRupee className="h-3.5 w-3.5 text-slate-400" />
+              <label className="text-xs font-bold uppercase tracking-wider text-[var(--text-sub)] dark:text-slate-400 mb-1.5 flex items-center gap-1.5">
+                <IndianRupee className="h-3.5 w-3.5 text-[var(--text-muted)]" />
                 Monthly Rent (₹)
               </label>
               <Input
@@ -186,24 +186,24 @@ export function AssignResidentModal({
                 placeholder="Rent"
                 value={form.monthlyRent}
                 onChange={(e) => handleChange('monthlyRent', e.target.value)}
-                className="bg-slate-950/60 border-slate-800 text-white placeholder:text-slate-600 focus-visible:ring-emerald-500 rounded-xl font-mono"
+                className="bg-white dark:bg-slate-950/60 border-[var(--border-main)] dark:border-slate-800 text-[var(--text-main)] dark:text-white placeholder:text-slate-400 focus-visible:ring-[var(--gold)] dark:focus-visible:ring-emerald-500 rounded-xl font-mono"
               />
             </div>
           </div>
 
-          <DialogFooter className="pt-4 border-t border-slate-800/80 flex items-center justify-end gap-2">
+          <DialogFooter className="pt-4 border-t border-[var(--border-main)] dark:border-slate-800/80 flex items-center justify-end gap-2">
             <Button
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
-              className="border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl"
+              className="border-[var(--border-main)] dark:border-slate-800 text-[var(--text-muted)] dark:text-slate-400 hover:text-[var(--text-main)] hover:bg-[var(--bg-card-subtle)] dark:hover:text-white dark:hover:bg-slate-800 rounded-xl"
             >
               Cancel
             </Button>
             <Button
               type="submit"
               disabled={isPending}
-              className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl shadow-lg shadow-emerald-950/40"
+              className="bg-emerald-600 hover:bg-emerald-700 dark:hover:bg-emerald-500 text-white font-semibold rounded-xl shadow-sm"
             >
               {isPending ? 'Assigning...' : 'Assign Resident'}
             </Button>

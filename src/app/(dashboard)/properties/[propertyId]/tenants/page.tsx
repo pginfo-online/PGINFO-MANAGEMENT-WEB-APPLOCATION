@@ -31,6 +31,7 @@ import {
   type VacateTenantPayload,
 } from '@/features/tenants/api/tenant.api';
 import { propertyApi } from '@/features/properties/api/property.api';
+import { useToast } from '@/components/ui/toast';
 import { formatINR, formatDate, formatPhone } from '@/lib/utils';
 import type { Tenant } from '@/types/tenant';
 import type { Room, Bed } from '@/types/property';
@@ -39,6 +40,7 @@ export default function TenantsManagementPage() {
   const params = useParams();
   const propertyId = params.propertyId as string;
   const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -95,10 +97,17 @@ export default function TenantsManagementPage() {
     mutationFn: (payload: AddTenantPayload) => tenantApi.addTenant(propertyId, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pg-tenants', propertyId] });
+      queryClient.invalidateQueries({ queryKey: ['tenants'] });
       queryClient.invalidateQueries({ queryKey: ['pg-rooms', propertyId] });
+      queryClient.invalidateQueries({ queryKey: ['mgmt-rooms', propertyId] });
       queryClient.invalidateQueries({ queryKey: ['property-dashboard', propertyId] });
+      toast.success('Tenant onboarded', 'New tenant successfully registered and room bed assigned.');
       setIsOnboardOpen(false);
       resetForm();
+    },
+    onError: (err: unknown) => {
+      const msg = err instanceof Error ? err.message : 'Failed to onboard tenant';
+      toast.error('Onboarding failed', msg);
     },
   });
 
@@ -108,9 +117,16 @@ export default function TenantsManagementPage() {
       tenantApi.vacateTenant(id, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pg-tenants', propertyId] });
+      queryClient.invalidateQueries({ queryKey: ['tenants'] });
       queryClient.invalidateQueries({ queryKey: ['pg-rooms', propertyId] });
+      queryClient.invalidateQueries({ queryKey: ['mgmt-rooms', propertyId] });
       queryClient.invalidateQueries({ queryKey: ['property-dashboard', propertyId] });
+      toast.success('Tenant vacated', 'Tenant marked as vacated and bed released.');
       setVacatingTenant(null);
+    },
+    onError: (err: unknown) => {
+      const msg = err instanceof Error ? err.message : 'Failed to vacate tenant';
+      toast.error('Action failed', msg);
     },
   });
 
