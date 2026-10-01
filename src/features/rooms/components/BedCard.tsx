@@ -40,7 +40,6 @@ export function BedCard({
   const isOccupied =
     bed.status === 'occupied' || (bed as unknown as { isOccupied?: boolean }).isOccupied;
   const isMaintenance = bed.status === 'maintenance';
-  const isVacant = !isOccupied && !isMaintenance;
 
   const rawLabel = String(bed.bedLabel || index + 1).trim();
   const bedLabel = rawLabel.toLowerCase().startsWith('bed')

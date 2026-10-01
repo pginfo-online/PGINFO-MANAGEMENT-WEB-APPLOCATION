@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -11,7 +11,6 @@ import {
   Trash2,
   Users,
   CheckCircle2,
-  AlertTriangle,
   Wind,
   Bath,
   Zap,
@@ -21,7 +20,6 @@ import {
   Tv,
   Lock,
   Shirt,
-  Calendar,
   IndianRupee,
 } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';

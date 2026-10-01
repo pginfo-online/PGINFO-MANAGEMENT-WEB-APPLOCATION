@@ -39,6 +39,12 @@ export interface PropertyDashboardSummary {
     images?: string[];
     phone?: string;
     status?: string;
+    roomConfigs?: {
+      _id?: string;
+      shareType?: string;
+      rent?: number;
+      [key: string]: unknown;
+    }[];
   };
   occupancy: {
     totalBeds: number;

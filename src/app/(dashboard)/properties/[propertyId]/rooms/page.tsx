@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useMemo, useCallback } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import React, { useState, useMemo } from 'react';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   Plus,
@@ -10,8 +10,6 @@ import {
   BedDouble,
   Building,
   Filter,
-  CheckCircle2,
-  AlertCircle,
   Home,
   ChevronDown,
 } from 'lucide-react';
@@ -29,11 +27,10 @@ import { RoomCard } from '@/features/rooms/components/RoomCard';
 import { AddEditRoomModal } from '@/features/rooms/components/AddEditRoomModal';
 import { useQuery } from '@tanstack/react-query';
 import { dashboardApi } from '@/features/dashboard/api/dashboard.api';
-import type { FloorLabel, CreatePGRoomPayload, Room, Floor } from '@/types/property';
+import type { CreatePGRoomPayload, Room } from '@/types/property';
 
 export default function RoomsManagementPage() {
   const params = useParams();
-  const router = useRouter();
   const propertyId = params.propertyId as string;
 
   // Filter & Search states (matching mobile PropertyScreen)
@@ -53,7 +50,6 @@ export default function RoomsManagementPage() {
   const {
     data: roomsData,
     isLoading,
-    refetch,
   } = usePGRooms(propertyId);
 
   const createRoomMutation = useCreateRoom(propertyId);

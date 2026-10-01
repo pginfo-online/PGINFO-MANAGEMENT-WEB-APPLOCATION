@@ -12,7 +12,6 @@ import {
   UserPlus,
   AlertCircle,
 } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
 import { formatINR } from '@/lib/utils';
 import type { Room, Bed } from '@/types/property';
 
