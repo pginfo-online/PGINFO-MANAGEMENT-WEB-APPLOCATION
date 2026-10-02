@@ -1,6 +1,13 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { formatINR, formatDate, formatPhone, getStatusVariant } from '../src/lib/utils';
+import {
+  formatINR,
+  formatDate,
+  formatPhone,
+  getStatusVariant,
+  getDaysOverdue,
+  formatMonthYear,
+} from '../src/lib/utils';
 
 describe('Utility Functions', () => {
   describe('formatINR', () => {
@@ -69,6 +76,28 @@ describe('Utility Functions', () => {
       assert.strictEqual(formatDate(null), '—');
       assert.strictEqual(formatDate(undefined), '—');
       assert.strictEqual(formatDate('invalid-date'), '—');
+    });
+  });
+
+  describe('getDaysOverdue', () => {
+    it('returns 0 for null or future dates', () => {
+      assert.strictEqual(getDaysOverdue(null), 0);
+      assert.strictEqual(getDaysOverdue(undefined), 0);
+      const future = new Date(Date.now() + 86400000 * 5).toISOString();
+      assert.strictEqual(getDaysOverdue(future), 0);
+    });
+
+    it('returns positive days for past dates', () => {
+      const threeDaysAgo = new Date(Date.now() - 86400000 * 3).toISOString();
+      const days = getDaysOverdue(threeDaysAgo);
+      assert.ok(days >= 2 && days <= 4);
+    });
+  });
+
+  describe('formatMonthYear', () => {
+    it('formats month and year nicely', () => {
+      assert.strictEqual(formatMonthYear(8, 2026), 'Aug 2026');
+      assert.strictEqual(formatMonthYear(10, 2026), 'Oct 2026');
     });
   });
 });

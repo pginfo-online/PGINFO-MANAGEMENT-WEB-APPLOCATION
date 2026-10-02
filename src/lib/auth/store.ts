@@ -2,6 +2,21 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { User, Capability, AvailableMode } from '@/types/auth';
 
+// Cookie options — shared between set and clear helpers
+const COOKIE_NAME = 'pg_auth_token';
+const COOKIE_MAX_AGE = 60 * 60 * 24 * 7; // 7 days in seconds
+
+function setAuthCookie(token: string): void {
+  if (typeof document === 'undefined') return;
+  const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+  document.cookie = `${COOKIE_NAME}=${token}; path=/; max-age=${COOKIE_MAX_AGE}; SameSite=Lax${secure}`;
+}
+
+function clearAuthCookie(): void {
+  if (typeof document === 'undefined') return;
+  document.cookie = `${COOKIE_NAME}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`;
+}
+
 interface AuthStoreState {
   user: User | null;
   token: string | null;
@@ -30,10 +45,7 @@ export const useAuthStore = create<AuthStoreState>()(
       isAuthenticated: false,
 
       setAuth: (user, token, capabilities = [], availableModes = []) => {
-        if (typeof document !== 'undefined') {
-          // Set cookie for Next.js SSR / middleware access
-          document.cookie = `pg_auth_token=${token}; path=/; max-age=604800; SameSite=Lax`;
-        }
+        setAuthCookie(token);
         set({
           user,
           token,
@@ -54,9 +66,7 @@ export const useAuthStore = create<AuthStoreState>()(
         })),
 
       clearAuth: () => {
-        if (typeof document !== 'undefined') {
-          document.cookie = 'pg_auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
-        }
+        clearAuthCookie();
         set({
           user: null,
           token: null,
@@ -71,15 +81,21 @@ export const useAuthStore = create<AuthStoreState>()(
     {
       name: 'pg_owner_auth',
       storage: createJSONStorage(() => localStorage),
+      // Persist everything except tempToken (it's short-lived and security-sensitive)
       partialize: (state) => ({
         user: state.user,
         token: state.token,
-        tempToken: state.tempToken,
         capabilities: state.capabilities,
         availableModes: state.availableModes,
         activePropertyId: state.activePropertyId,
         isAuthenticated: state.isAuthenticated,
       }),
+      // After rehydration, re-sync the cookie with the persisted token
+      onRehydrateStorage: () => (state) => {
+        if (state?.token && state.isAuthenticated) {
+          setAuthCookie(state.token);
+        }
+      },
     }
   )
 );

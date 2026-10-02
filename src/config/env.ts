@@ -16,7 +16,7 @@ export const env = {
   /** API base URL — must include /api/v1 */
   NEXT_PUBLIC_API_URL: optionalEnv(
     'NEXT_PUBLIC_API_URL',
-    'https://pgonline-backend-v-1-0.onrender.com/api/v1'
+    'http://localhost:5001/api/v1'
   ),
   /** App name for display */
   NEXT_PUBLIC_APP_NAME: optionalEnv('NEXT_PUBLIC_APP_NAME', 'PGinfo Management'),

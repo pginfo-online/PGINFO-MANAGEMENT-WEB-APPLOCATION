@@ -86,3 +86,38 @@ export function getStatusVariant(status: string): {
       };
   }
 }
+
+export function getDaysOverdue(dueDate: string | Date | null | undefined): number {
+  if (!dueDate) return 0;
+  try {
+    const due = typeof dueDate === 'string' ? new Date(dueDate).getTime() : dueDate.getTime();
+    if (isNaN(due)) return 0;
+    const now = Date.now();
+    if (due >= now) return 0;
+    return Math.max(1, Math.floor((now - due) / (1000 * 60 * 60 * 24)));
+  } catch {
+    return 0;
+  }
+}
+
+export function formatMonthYear(month: number, year: number): string {
+  const MONTH_NAMES = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+  const m = MONTH_NAMES[(month || 1) - 1] || `Month ${month}`;
+  return `${m} ${year || ''}`.trim();
+}
+
+export function getInitials(name: string | null | undefined): string {
+  if (!name || !name.trim()) return 'R';
+  return name
+    .trim()
+    .split(/\s+/)
+    .map((part) => part.charAt(0))
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+}
+
+

@@ -7,6 +7,11 @@ import type {
   GenerateRentResponse,
   MarkRentPaidRequest,
   SendReminderRequest,
+  CreatePaymentLinkResponse,
+  VerifyPaymentStatusResponse,
+  BulkRemindersResponse,
+  RentReceiptResponse,
+  RentReminder,
 } from '@/types/rent';
 
 export interface GetRentRecordsParams {
@@ -15,6 +20,20 @@ export interface GetRentRecordsParams {
   status?: string;
   month?: number | string;
   year?: number;
+  search?: string;
+}
+
+export interface PaginatedRentResponse {
+  success: true;
+  message: string;
+  data: RentRecord[];
+  summary?: RentSummary;
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+  };
 }
 
 export const rentApi = {
@@ -46,14 +65,14 @@ export const rentApi = {
     apiClient.post<RentRecord>(`/manage/rent/${id}/mark-paid`, payload),
 
   sendReminder: (id: string, payload: SendReminderRequest) =>
-    apiClient.post(`/manage/rent/${id}/send-reminder`, payload),
+    apiClient.post<{ success: boolean; message?: string }>(`/manage/rent/${id}/send-reminder`, payload),
 
   sendBulkReminders: (
     rentRecordIds: string[],
     channel: string = 'whatsapp',
     type: string = 'due_reminder'
   ) =>
-    apiClient.post<{ total: number; successful: number; failed: number }>(
+    apiClient.post<BulkRemindersResponse>(
       '/manage/rent/bulk-reminders',
       {
         rentRecordIds,
@@ -63,13 +82,13 @@ export const rentApi = {
     ),
 
   createPaymentLink: (id: string) =>
-    apiClient.post<{ paymentLink: Record<string, unknown> }>(`/manage/rent/${id}/payment-link`),
+    apiClient.post<CreatePaymentLinkResponse>(`/manage/rent/${id}/payment-link`),
 
   verifyPaymentStatus: (id: string) =>
-    apiClient.post(`/manage/rent/${id}/verify-status`),
+    apiClient.post<VerifyPaymentStatusResponse>(`/manage/rent/${id}/verify-status`),
 
   getReminders: (id: string) =>
-    apiClient.get<Record<string, unknown>[]>(`/manage/rent/${id}/reminders`),
+    apiClient.get<RentReminder[]>(`/manage/rent/${id}/reminders`),
 
   getRentSettings: (pgId: string) =>
     apiClient.get<RentSettings>(`/manage/pgs/${pgId}/rent-settings`),
@@ -78,5 +97,6 @@ export const rentApi = {
     apiClient.put<RentSettings>(`/manage/pgs/${pgId}/rent-settings`, payload),
 
   getReceipt: (id: string) =>
-    apiClient.get<{ receiptUrl?: string; html?: string }>(`/manage/rent/${id}/receipt`),
+    apiClient.get<RentReceiptResponse>(`/manage/rent/${id}/receipt`),
 };
+
