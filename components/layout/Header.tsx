@@ -188,7 +188,7 @@ export default function Header() {
                       : "Asha Sharma"}
                   </p>
                   <p className="text-[11px] text-slate-400 truncate">
-                    {currentUser?.email || "owner@example.com"}
+                    {currentUser?.email || "Account"}
                   </p>
                 </div>
 

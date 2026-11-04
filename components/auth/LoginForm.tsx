@@ -10,7 +10,6 @@ import {
   ArrowRight,
   Eye,
   EyeOff,
-  Sparkles,
   AlertCircle,
   CheckCircle2,
 } from "lucide-react";
@@ -18,8 +17,8 @@ import { authActions } from "@/lib/api/client";
 
 export default function LoginForm() {
   const router = useRouter();
-  const [email, setEmail] = useState("owner@example.com");
-  const [password, setPassword] = useState("StrongPass123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -50,25 +49,6 @@ export default function LoginForm() {
     }
   };
 
-  const handleDemoLogin = async () => {
-    try {
-      setIsLoading(true);
-      setErrorMessage("");
-      setEmail("owner@example.com");
-      setPassword("StrongPass123");
-      await authActions.demoLogin();
-      setSuccessMessage("Demo Owner session initialized! Redirecting...");
-      setTimeout(() => {
-        router.push("/home");
-        router.refresh();
-      }, 500);
-    } catch (err: any) {
-      setErrorMessage(err?.message || "Demo login failed.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   return (
     <div className="w-full max-w-md mx-auto p-6 sm:p-8">
       {/* Brand & Title */}
@@ -82,32 +62,6 @@ export default function LoginForm() {
         <p className="mt-2 text-sm text-slate-400">
           Sign in to manage your PGs, hostels, flats, and residents
         </p>
-      </div>
-
-      {/* Demo Credentials Quick-Card */}
-      <div className="mb-6 rounded-2xl bg-slate-900/90 border border-indigo-500/30 p-4 shadow-lg backdrop-blur">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-amber-400" />
-            <span className="text-xs font-semibold text-slate-200">
-              Instant Demo Access
-            </span>
-          </div>
-          <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-            Pre-Seeded
-          </span>
-        </div>
-        <p className="text-xs text-slate-400 mb-3">
-          Explore RentOk Living with 2 properties, 12 beds, and 3 active tenants.
-        </p>
-        <button
-          type="button"
-          onClick={handleDemoLogin}
-          disabled={isLoading}
-          className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 px-4 py-2.5 text-xs font-semibold text-white shadow-md shadow-indigo-600/30 transition active:scale-[0.98] cursor-pointer disabled:opacity-50"
-        >
-          <span>🚀 1-Click Sign In (Owner Demo)</span>
-        </button>
       </div>
 
       {/* Login Card */}

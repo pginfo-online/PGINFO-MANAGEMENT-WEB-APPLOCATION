@@ -184,13 +184,6 @@ export const authActions = {
     }
   },
 
-  async demoLogin(): Promise<UserProfile> {
-    return this.login({
-      email: "owner@example.com",
-      password: "StrongPass123",
-    });
-  },
-
   async logout(): Promise<void> {
     const rt = authStorage.getRefreshToken();
     const at = authStorage.getToken();
@@ -224,61 +217,6 @@ export const authActions = {
     }
   },
 };
-
-/**
- * Explicit demo session helper.
- */
-export async function ensureAuthenticatedSession(): Promise<string> {
-  const token = authStorage.getToken();
-  if (token) return token;
-
-  try {
-    const res = await fetch(`${API_BASE}/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: "owner@example.com",
-        password: "StrongPass123",
-      }),
-    });
-
-    if (!res.ok) {
-      throw new Error("Default login failed");
-    }
-
-    const data = await res.json();
-    const initialToken = data.tokens.accessToken;
-    authStorage.setToken(initialToken);
-    authStorage.setRefreshToken(data.tokens.refreshToken);
-    authStorage.setUser(data.user);
-
-    // Fetch orgs to switch
-    const orgsRes = await fetch(`${API_BASE}/organizations`, {
-      headers: { Authorization: `Bearer ${initialToken}` },
-    });
-    if (orgsRes.ok) {
-      const orgs = await orgsRes.json();
-      if (Array.isArray(orgs) && orgs.length > 0) {
-        const orgId = orgs[0].id;
-        authStorage.setOrgId(orgId);
-        const switchRes = await fetch(`${API_BASE}/organizations/${orgId}/switch`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${initialToken}` },
-        });
-        if (switchRes.ok) {
-          const switchData = await switchRes.json();
-          authStorage.setToken(switchData.accessToken);
-          return switchData.accessToken;
-        }
-      }
-    }
-
-    return initialToken;
-  } catch (err) {
-    console.warn("Could not authenticate demo session:", err);
-    return "";
-  }
-}
 
 async function request<T>(
   path: string,
