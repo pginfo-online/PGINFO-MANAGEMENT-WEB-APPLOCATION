@@ -15,44 +15,40 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/client";
 import { formatINR, formatDate, cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { QueryError, Skeleton } from "../layout/WorkspaceUI";
 
 export default function MetersView() {
   const { selectedPropertyId } = usePropertyStore();
   const queryClient = useQueryClient();
   const [isAddReadingOpen, setIsAddReadingOpen] = useState(false);
   const [selectedMeterId, setSelectedMeterId] = useState("");
-  const [newReading, setNewReading] = useState("1940");
+  const [newReading, setNewReading] = useState("");
 
-  const { data: metersData, isLoading } = useQuery({
-    queryKey: ["meters"],
-    queryFn: () => api.meters.list(),
+  const meterQuery = useQuery({
+    queryKey: ["meters", selectedPropertyId],
+    queryFn: () => api.meters.list(selectedPropertyId ?? undefined),
+  });
+  const meters = meterQuery.data ?? [];
+  const reading = useMutation({
+    mutationFn: () => api.meters.addReading(selectedMeterId, { reading: Number(newReading) }),
+    onSuccess() {
+      void queryClient.invalidateQueries({ queryKey: ["meters"] });
+      void queryClient.invalidateQueries({ queryKey: ["billing"] });
+      void queryClient.invalidateQueries({ queryKey: ["money"] });
+      toast.success("Meter reading recorded");
+      setIsAddReadingOpen(false);
+      setNewReading("");
+    },
+    onError(error) { toast.error(error.message); },
   });
 
-  const meters = metersData || [
-    {
-      id: "meter-1",
-      meterNumber: "MTR-101-A",
-      tariffRate: 1200, // ₹12/unit
-      initialReading: 1200,
-      currentReading: 1680,
-      room: { roomNumber: "101" },
-      readings: [
-        {
-          id: "r-1",
-          reading: 1680,
-          unitsConsumed: 260,
-          totalAmount: 312000,
-          readingDate: "2026-10-31",
-        },
-      ],
-    },
-  ];
-
-  const handleAddReading = (e: React.FormEvent) => {
-    e.preventDefault();
-    toast.success("Meter reading recorded & split bill generated for Room 101!");
-    setIsAddReadingOpen(false);
+  const handleAddReading = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!reading.isPending && selectedMeterId && Number(newReading) > 0) reading.mutate();
   };
+
+  if (meterQuery.isPending) return <Skeleton layout="cards" />;
+  if (meterQuery.error) return <QueryError error={meterQuery.error} retry={() => void meterQuery.refetch()} />;
 
   return (
     <div className="space-y-6 pb-20 animate-in fade-in duration-300">
@@ -66,7 +62,8 @@ export default function MetersView() {
         </div>
 
         <button
-          onClick={() => setIsAddReadingOpen(true)}
+          disabled={!meters.length}
+          onClick={() => { setSelectedMeterId(meters[0]?.id ?? ""); setIsAddReadingOpen(true); }}
           className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-md shadow-blue-500/20 transition cursor-pointer"
         >
           <Plus className="h-4 w-4" />
@@ -74,7 +71,7 @@ export default function MetersView() {
         </button>
       </div>
 
-      {/* Meters List */}
+      {!meters.length && <p className="workspace-card p-6 text-sm text-slate-600">No meters are configured for this view.</p>}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {meters.map((meter: any) => {
           const tariff = meter.tariffRate ? meter.tariffRate / 100 : 12;
@@ -124,15 +121,10 @@ export default function MetersView() {
               {/* Bill & Tenant Split */}
               <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-100">
                 <div>
-                  <span className="text-slate-400 block">Generated Room Total</span>
+                  <span className="text-slate-400 block">Estimated cost since initial reading</span>
                   <span className="text-sm font-bold text-rose-600">₹{totalBill.toLocaleString("en-IN")}</span>
                 </div>
-                <button
-                  onClick={() => toast.success("Split bills posted to active tenants in room!")}
-                  className="px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-100 font-semibold transition"
-                >
-                  Post to Dues
-                </button>
+
               </div>
             </div>
           );

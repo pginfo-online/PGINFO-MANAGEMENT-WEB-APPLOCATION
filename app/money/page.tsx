@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import MoneyWorkspace from "@/components/money/MoneyWorkspace";
 
-export default function MoneyIndexPage() {
-  redirect("/money/dues");
+export default function MoneyPage() {
+  return <MoneyWorkspace />;
 }

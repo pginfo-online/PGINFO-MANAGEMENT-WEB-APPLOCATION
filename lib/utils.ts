@@ -26,7 +26,8 @@ export function formatINR(paise: number | null | undefined, compact = false): st
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
-    maximumFractionDigits: 0,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
   }).format(rupees);
 }
 
@@ -41,6 +42,7 @@ export function formatDate(dateInput: string | Date | null | undefined): string 
     day: "numeric",
     month: "short",
     year: "numeric",
+    timeZone: "Asia/Kolkata",
   }).format(d);
 }
 

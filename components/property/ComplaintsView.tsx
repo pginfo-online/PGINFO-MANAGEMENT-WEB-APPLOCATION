@@ -19,6 +19,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/client";
 import { formatDate, cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { QueryError, Skeleton } from "../layout/WorkspaceUI";
 
 export default function ComplaintsView() {
   const { selectedPropertyId } = usePropertyStore();
@@ -27,7 +28,7 @@ export default function ComplaintsView() {
 
   const [statusFilter, setStatusFilter] = useState("ALL");
 
-  const { data: complaintsData, isLoading } = useQuery({
+  const { data: complaintsData, isLoading, error, refetch } = useQuery({
     queryKey: ["complaints", selectedPropertyId, statusFilter],
     queryFn: () =>
       api.complaints.list({
@@ -80,13 +81,7 @@ export default function ComplaintsView() {
             <Plus className="h-4 w-4" />
             <span>Add Complaint</span>
           </button>
-          <button
-            onClick={() => toast.info("Rio AI Maintenance Bot is active")}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold shadow-xs transition cursor-pointer"
-          >
-            <Bot className="h-3.5 w-3.5 text-blue-600" />
-            <span>Complaint Bot</span>
-          </button>
+
         </div>
       </div>
 
@@ -110,11 +105,8 @@ export default function ComplaintsView() {
 
       {/* Ticket Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        {isLoading ? (
-          <div className="col-span-2 py-12 text-center text-slate-400">
-            <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-blue-600" />
-            <span>Loading complaints...</span>
-          </div>
+        {error ? <QueryError error={error} retry={() => void refetch()} /> : isLoading ? (
+          <Skeleton count={4} />
         ) : complaints.length === 0 ? (
           <div className="col-span-2 py-12 text-center text-slate-400 bg-white rounded-3xl border border-slate-200/80">
             No complaints found for selected status filter.

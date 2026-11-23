@@ -79,6 +79,7 @@ export default function AddRentDuesDrawer() {
       toast.success("Rent due added successfully!");
       queryClient.invalidateQueries({ queryKey: ["dashboardMetrics"] });
       queryClient.invalidateQueries({ queryKey: ["billing"] });
+      void queryClient.invalidateQueries({ queryKey: ["money"] });
       queryClient.invalidateQueries({ queryKey: ["residents"] });
       queryClient.invalidateQueries({ queryKey: ["properties"] });
       queryClient.invalidateQueries({ queryKey: ["rooms"] });
@@ -120,6 +121,7 @@ export default function AddRentDuesDrawer() {
       toast.success(`Dues generated for all ${residents.length} tenants!`);
       queryClient.invalidateQueries({ queryKey: ["dashboardMetrics"] });
       queryClient.invalidateQueries({ queryKey: ["billing"] });
+      void queryClient.invalidateQueries({ queryKey: ["money"] });
       queryClient.invalidateQueries({ queryKey: ["residents"] });
       queryClient.invalidateQueries({ queryKey: ["properties"] });
       closeDrawer();
@@ -140,6 +142,7 @@ export default function AddRentDuesDrawer() {
     toast.success("Dues created for selected tenants!");
     queryClient.invalidateQueries({ queryKey: ["dashboardMetrics"] });
     queryClient.invalidateQueries({ queryKey: ["billing"] });
+    void queryClient.invalidateQueries({ queryKey: ["money"] });
     queryClient.invalidateQueries({ queryKey: ["residents"] });
     queryClient.invalidateQueries({ queryKey: ["properties"] });
     closeDrawer();

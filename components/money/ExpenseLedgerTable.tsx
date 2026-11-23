@@ -15,19 +15,20 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/client";
 import { formatINR, formatDate, cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { ExpenseEditor, type ExpenseRecord } from "../drawers/AddExpenseModal";
+import { QueryError, Skeleton } from "../layout/WorkspaceUI";
 
 export default function ExpenseLedgerTable() {
   const { selectedPropertyId } = usePropertyStore();
   const { setAddExpenseOpen } = useUiStore();
   const queryClient = useQueryClient();
 
-  const { data: expensesData, isLoading } = useQuery({
-    queryKey: ["expenses", selectedPropertyId],
-    queryFn: () =>
-      api.expenses.list({
-        propertyId: selectedPropertyId || undefined,
-        limit: 50,
-      }),
+  const [editing, setEditing] = useState<ExpenseRecord>();
+  const [pagination, setPagination] = useState({ propertyId: selectedPropertyId, page: 1 });
+  const page = pagination.propertyId === selectedPropertyId ? pagination.page : 1;
+  const { data: expensesData, isLoading, error, refetch } = useQuery({
+    queryKey: ["expenses", selectedPropertyId, page],
+    queryFn: () => api.expenses.list({ propertyId: selectedPropertyId ?? undefined, page, limit: 25 }),
   });
 
   const expenses = expensesData?.data || [];
@@ -37,6 +38,7 @@ export default function ExpenseLedgerTable() {
     onSuccess: () => {
       toast.success("Expense voucher removed");
       queryClient.invalidateQueries({ queryKey: ["expenses"] });
+      void queryClient.invalidateQueries({ queryKey: ["money"] });
       queryClient.invalidateQueries({ queryKey: ["dashboardMetrics"] });
     },
     onError: (err: any) => {
@@ -66,26 +68,10 @@ export default function ExpenseLedgerTable() {
         </button>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="p-5 rounded-3xl bg-white border border-slate-200/80 shadow-xs">
-          <span className="text-xs font-semibold text-slate-400 block">Total Expenses Incurred</span>
-          <span className="text-2xl font-bold text-slate-900 mt-1 block">
-            {formatINR(totalExpense)}
-          </span>
-          <span className="text-xs text-slate-500 font-medium">{expenses.length} operational vouchers</span>
-        </div>
-        <div className="p-5 rounded-3xl bg-white border border-slate-200/80 shadow-xs">
-          <span className="text-xs font-semibold text-slate-400 block">Salaries & Payroll</span>
-          <span className="text-2xl font-bold text-blue-600 mt-1 block">₹0</span>
-          <span className="text-xs text-slate-500 font-medium">Pending cycle disbursement</span>
-        </div>
-        <div className="p-5 rounded-3xl bg-white border border-slate-200/80 shadow-xs">
-          <span className="text-xs font-semibold text-slate-400 block">Repair & Maintenance</span>
-          <span className="text-2xl font-bold text-amber-600 mt-1 block">₹0</span>
-          <span className="text-xs text-slate-500 font-medium">Plumbing & electrical</span>
-        </div>
-      </div>
+      {error && <QueryError error={error} retry={() => void refetch()} />}
+      {expensesData && <div className="workspace-card p-4 text-sm text-slate-600">
+        <strong className="text-slate-900">{formatINR(totalExpense)}</strong> on this page · {expensesData.meta.total} expenses
+      </div>}
 
       {/* Table Section */}
       <div className="rounded-3xl bg-white border border-slate-200/80 shadow-xs overflow-hidden">
@@ -106,8 +92,7 @@ export default function ExpenseLedgerTable() {
               {isLoading ? (
                 <tr>
                   <td colSpan={7} className="py-12 text-center text-slate-400">
-                    <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-blue-600" />
-                    <span>Loading expense ledger...</span>
+                    <Skeleton count={4} />
                   </td>
                 </tr>
               ) : expenses.length === 0 ? (
@@ -134,13 +119,14 @@ export default function ExpenseLedgerTable() {
                       {e.paymentMode}
                     </td>
                     <td className="py-4 px-6 text-xs text-slate-700 font-medium">
-                      {e.paidBy || "Owner"}
+                      {e.paidBy || "—"}
                     </td>
                     <td className="py-4 px-6 text-xs text-slate-700">
-                      {e.paidTo || "Vendor"}
+                      {e.paidTo || "—"}
                     </td>
                     <td className="py-4 px-6 text-right">
-                      <button
+                      <button className="workspace-button mr-2" onClick={() => setEditing(e)}>Edit</button>
+                      <button aria-label="Delete expense" disabled={deleteExpenseMutation.isPending}
                         onClick={() => {
                           if (confirm("Delete this expense voucher?")) {
                             deleteExpenseMutation.mutate(e.id);
@@ -158,6 +144,11 @@ export default function ExpenseLedgerTable() {
           </table>
         </div>
       </div>
+      {(page > 1 || expensesData?.meta.hasMore) && <div className="flex justify-end gap-2">
+        <button className="workspace-button" disabled={page === 1} onClick={() => setPagination({ propertyId: selectedPropertyId, page: page - 1 })}>Previous</button>
+        <button className="workspace-button" disabled={!expensesData?.meta.hasMore} onClick={() => setPagination({ propertyId: selectedPropertyId, page: page + 1 })}>Next</button>
+      </div>}
+      {editing && <ExpenseEditor expense={editing} close={() => setEditing(undefined)} />}
     </div>
   );
 }

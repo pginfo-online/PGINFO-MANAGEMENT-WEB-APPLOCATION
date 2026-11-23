@@ -1,115 +1,58 @@
 "use client";
 
-import React from "react";
-import { FileText, Download, TrendingUp, Users, DollarSign } from "lucide-react";
-import { authStorage } from "@/lib/api/client";
-import { toast } from "sonner";
+import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { Download } from "lucide-react";
+import { api } from "@/lib/api/client";
+import { usePropertyStore } from "@/lib/store";
+import { PageHeading } from "../layout/WorkspaceUI";
+
+const reports = [
+  ["dues", "Dues", "Outstanding tenant balances"],
+  ["collections", "Collections", "Payments received and their payment methods"],
+  ["expenses", "Expenses", "Recorded operating expenses"],
+  ["residents", "Resident registry", "Tenant records and room assignments"],
+] as const;
 
 export default function ReportsView() {
-  const downloadReport = async (path: string, filename: string) => {
-    try {
-      const token = authStorage.getToken();
-      const res = await fetch(`/api/v1/reports/${path}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      if (!res.ok) throw new Error("Failed to export report");
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      toast.success(`${filename} downloaded successfully!`);
-    } catch (err: any) {
-      toast.error(err.message || "Failed to download CSV");
-    }
-  };
+  const propertyId = usePropertyStore((state) => state.selectedPropertyId) ?? undefined;
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [mode, setMode] = useState("");
+  const download = useMutation({
+    mutationFn: async (kind: (typeof reports)[number][0]) => {
+      if (kind !== "residents" && startDate && endDate && startDate > endDate) throw new Error("End date must be on or after the start date.");
+      const filters = kind === "residents" ? {} : { startDate, endDate, mode: kind === "collections" ? mode : undefined };
+      const csv = await api.reports.download(kind, { propertyId, ...filters });
+      const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${kind}.csv`;
+      document.body.append(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    },
+  });
 
   return (
-    <div className="space-y-6 pb-20 animate-in fade-in duration-300">
-      {/* Top Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Financial & Operational Reports</h1>
-        <p className="text-xs text-slate-500 mt-1">
-          Export verified ledger entries, collections, resident roll, and expense logs to CSV / Excel
-        </p>
+    <>
+      <PageHeading title="Reports" description="Export CSV reports for the selected property or the full workspace." />
+      <fieldset className="workspace-card workspace-form mb-5 grid gap-4 p-4 sm:grid-cols-3">
+        <label>From date<input type="date" value={startDate} max={endDate || undefined} onChange={(event) => setStartDate(event.target.value)} /></label>
+        <label>Through date<input type="date" value={endDate} min={startDate || undefined} onChange={(event) => setEndDate(event.target.value)} /></label>
+        <label>Collections payment method<select value={mode} onChange={(event) => setMode(event.target.value)}><option value="">All methods</option><option>UPI</option><option value="CASH">Cash</option><option value="BANK_TRANSFER">Bank transfer</option><option value="CHEQUE">Cheque</option><option value="RAZORPAY">Razorpay</option></select></label>
+      </fieldset>
+      {download.error && <p className="mb-4 text-sm text-rose-700" role="alert">{download.error.message}</p>}
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {reports.map(([kind, title, description]) => (
+          <article className="workspace-card flex flex-col items-start p-5" key={kind}>
+            <h2 className="text-lg font-semibold">{title}</h2>
+            <p className="mb-5 mt-1 flex-1 text-sm text-slate-600">{description}</p>
+            <button className="workspace-button" disabled={download.isPending} onClick={() => download.mutate(kind)}><Download className="size-4" />{download.isPending && download.variables === kind ? "Exporting…" : "Export CSV"}</button>
+          </article>
+        ))}
       </div>
-
-      {/* CSV Export Action Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Collections CSV */}
-        <div className="p-6 rounded-3xl bg-white border border-slate-200/80 shadow-xs flex flex-col justify-between space-y-4">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-              <DollarSign className="h-5 w-5" />
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-slate-900">Collections Report</h3>
-              <span className="text-xs text-slate-400">Payment receipt audit trail</span>
-            </div>
-          </div>
-          <p className="text-xs text-slate-500">
-            Contains resident name, phone, room, payment mode (UPI/Cash), receipt numbers, and bank UTRs.
-          </p>
-          <button
-            onClick={() => downloadReport("collections/csv", "collections_report.csv")}
-            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs transition cursor-pointer"
-          >
-            <Download className="h-4 w-4" />
-            <span>Export Collections CSV</span>
-          </button>
-        </div>
-
-        {/* Residents CSV */}
-        <div className="p-6 rounded-3xl bg-white border border-slate-200/80 shadow-xs flex flex-col justify-between space-y-4">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
-              <Users className="h-5 w-5" />
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-slate-900">Resident Registry</h3>
-              <span className="text-xs text-slate-400">Tenant roll & stay records</span>
-            </div>
-          </div>
-          <p className="text-xs text-slate-500">
-            Full resident list with room assignments, joining dates, monthly rents, deposit balances, and statuses.
-          </p>
-          <button
-            onClick={() => downloadReport("residents/csv", "residents_registry.csv")}
-            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs transition cursor-pointer"
-          >
-            <Download className="h-4 w-4" />
-            <span>Export Residents CSV</span>
-          </button>
-        </div>
-
-        {/* Expenses CSV */}
-        <div className="p-6 rounded-3xl bg-white border border-slate-200/80 shadow-xs flex flex-col justify-between space-y-4">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center">
-              <FileText className="h-5 w-5" />
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-slate-900">Expense Ledger</h3>
-              <span className="text-xs text-slate-400">Operational costs & outflow</span>
-            </div>
-          </div>
-          <p className="text-xs text-slate-500">
-            Categorized expense vouchers, payee/vendor details, disbursing staff, and payment modes.
-          </p>
-          <button
-            onClick={() => downloadReport("expenses/csv", "expense_ledger.csv")}
-            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold shadow-xs transition cursor-pointer"
-          >
-            <Download className="h-4 w-4" />
-            <span>Export Expenses CSV</span>
-          </button>
-        </div>
-      </div>
-    </div>
+    </>
   );
 }

@@ -15,28 +15,18 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/client";
 import { formatINR, formatDate, cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { QueryError, Skeleton } from "../layout/WorkspaceUI";
 
 export default function BookingsView() {
   const queryClient = useQueryClient();
-  const [isAddOpen, setIsAddOpen] = useState(false);
-
-  const { data: bookingsData, isLoading } = useQuery({
-    queryKey: ["bookings"],
-    queryFn: () => api.bookings.list(),
+  const { selectedPropertyId } = usePropertyStore();
+  const [pagination, setPagination] = useState({ propertyId: selectedPropertyId, page: 1 });
+  const page = selectedPropertyId === pagination.propertyId ? pagination.page : 1;
+  const bookingsQuery = useQuery({
+    queryKey: ["bookings", selectedPropertyId, page],
+    queryFn: () => api.bookings.list({ propertyId: selectedPropertyId ?? undefined, page }),
   });
-
-  const bookings = bookingsData || [
-    {
-      id: "b-1",
-      guestName: "Rohit Deshmukh",
-      guestMobile: "9888877777",
-      guestEmail: "rohit.d@example.com",
-      tokenAmount: 500000, // ₹5,000
-      expectedMoveIn: "2026-11-10",
-      status: "CONFIRMED",
-      paymentMode: "UPI",
-    },
-  ];
+  const bookings = bookingsQuery.data?.data ?? [];
 
   const cancelBookingMutation = useMutation({
     mutationFn: (id: string) => api.bookings.cancel(id),
@@ -48,6 +38,9 @@ export default function BookingsView() {
       toast.error(err.message || "Failed to cancel booking");
     },
   });
+
+  if (bookingsQuery.isPending) return <Skeleton />;
+  if (bookingsQuery.error) return <QueryError error={bookingsQuery.error} retry={() => void bookingsQuery.refetch()} />;
 
   return (
     <div className="space-y-6 pb-20 animate-in fade-in duration-300">
@@ -128,6 +121,10 @@ export default function BookingsView() {
             </tbody>
           </table>
         </div>
+      </div>
+      <div className="flex justify-end gap-2">
+        <button className="workspace-button" disabled={page === 1} onClick={() => setPagination({ propertyId: selectedPropertyId, page: page - 1 })}>Previous</button>
+        <button className="workspace-button" disabled={!bookingsQuery.data?.meta.hasMore} onClick={() => setPagination({ propertyId: selectedPropertyId, page: page + 1 })}>Next</button>
       </div>
     </div>
   );

@@ -15,25 +15,25 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api/client";
 import { formatINR, cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { PageHeading, QueryError, Skeleton } from "../layout/WorkspaceUI";
 
 export default function BedAvailabilityGrid() {
   const { selectedPropertyId } = usePropertyStore();
 
-  const { data: propertiesData } = useQuery({
-    queryKey: ["properties"],
-    queryFn: () => api.properties.list(),
-  });
+  const chooseProperty = useUiStore((state) => state.setPropertySelectorOpen);
+  const propertyId = selectedPropertyId ?? "";
 
-  const properties = propertiesData?.data || [];
-  const propertyId = selectedPropertyId || (properties[0]?.id ?? "");
-
-  const { data: rooms, isLoading } = useQuery({
+  const { data: rooms, isLoading, error, refetch } = useQuery({
     queryKey: ["rooms", propertyId],
     queryFn: () => (propertyId ? api.rooms.listByProperty(propertyId) : []),
     enabled: !!propertyId,
   });
 
   const roomList = rooms || [];
+
+  if (!propertyId) return <PageHeading title="Bed availability" description="Choose a property to see which beds are available." action={<button className="workspace-button primary" onClick={() => chooseProperty(true)}>Choose property</button>} />;
+  if (isLoading) return <Skeleton layout="cards" count={6} />;
+  if (error) return <QueryError error={error} retry={() => void refetch()} />;
 
   return (
     <div className="space-y-6 pb-20 animate-in fade-in duration-300">

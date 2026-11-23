@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useSyncExternalStore } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Header from "@/components/layout/Header";
 import Sidebar from "@/components/layout/Sidebar";
@@ -16,82 +16,70 @@ import AddComplaintModal from "@/components/drawers/AddComplaintModal";
 import AddStaffModal from "@/components/drawers/AddStaffModal";
 import AnnouncementsModal from "@/components/drawers/AnnouncementsModal";
 import AddPropertyModal from "@/components/drawers/AddPropertyModal";
+import { Skeleton } from "./WorkspaceUI";
+import { usePropertyStore, useUiStore } from "@/lib/store";
 import { authStorage } from "@/lib/api/client";
 
 interface AppShellProps {
   children: React.ReactNode;
 }
 
+function readSession() {
+  return Boolean(authStorage.getToken());
+}
+
+function subscribeToStorage(notify: () => void) {
+  const identity = () => JSON.stringify([authStorage.getUser()?.id, authStorage.getOrgId()]);
+  let scope = identity();
+  function sync() {
+    scope = identity();
+    if (readSession()) usePropertyStore.getState().restoreSelection();
+    notify();
+  }
+  function onStorage() {
+    if (identity() !== scope) {
+      window.location.reload();
+      return;
+    }
+    sync();
+  }
+  sync();
+  window.addEventListener("storage", onStorage);
+  window.addEventListener("pginfo-session", sync);
+  return () => {
+    window.removeEventListener("storage", onStorage);
+    window.removeEventListener("pginfo-session", sync);
+  };
+}
+
 export default function AppShell({ children }: AppShellProps) {
+  const isAddRoomOpen = useUiStore((state) => state.isAddRoomOpen);
+  const isAddStaffOpen = useUiStore((state) => state.isAddStaffOpen);
   const pathname = usePathname();
   const router = useRouter();
-  const [isVerifying, setIsVerifying] = useState(true);
-
+  const hasSession = useSyncExternalStore(subscribeToStorage, readSession, () => null);
   const isAuthRoute = pathname === "/login" || pathname === "/signup";
 
   useEffect(() => {
-    let mounted = true;
-
-    function checkAuth() {
-      const token = authStorage.getToken();
-
-      if (isAuthRoute) {
-        // If already logged in and visiting login/signup, redirect to home
-        if (token) {
-          router.replace("/home");
-        } else {
-          if (mounted) setIsVerifying(false);
-        }
-        return;
-      }
-
-      // If on protected route without token, redirect to login
-      if (!token) {
-        router.replace("/login");
-      } else {
-        if (mounted) setIsVerifying(false);
-      }
+    if (hasSession === false && !isAuthRoute) {
+      const next = window.location.pathname + window.location.search;
+      router.replace(`/login?next=${encodeURIComponent(next)}`);
     }
+  }, [hasSession, isAuthRoute, router]);
 
-    checkAuth();
-    return () => {
-      mounted = false;
-    };
-  }, [pathname, isAuthRoute, router]);
-
-  // If on login or signup screen, render directly without the dashboard shell
-  if (isAuthRoute) {
-    return <>{children}</>;
-  }
-
-  // Brief loading screen while verifying session
-  if (isVerifying) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#090E24] text-white">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-9 w-9 border-3 border-blue-500/20 border-t-blue-500 rounded-full animate-spin" />
-          <span className="text-xs text-slate-400">Loading PgInfo workspace...</span>
-        </div>
-      </div>
-    );
-  }
+  if (isAuthRoute) return children;
+  if (!hasSession) return <main className="mx-auto max-w-5xl p-8"><Skeleton layout="cards" count={8} /></main>;
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#F4F7FF] text-slate-900 antialiased">
-      {/* Top Header */}
-      <Header />
-
-      <div className="flex flex-1 overflow-hidden">
-        {/* Dark Navy Sidebar */}
-        <Sidebar />
-
-        {/* Main Application Viewport */}
-        <main className="min-w-0 flex-1 overflow-y-auto bg-[#F4F7FF] p-4 pb-24 sm:p-6 sm:pb-24 lg:p-8 lg:pb-8">
-          <div className="max-w-7xl mx-auto w-full">{children}</div>
+    <div className="workspace-shell">
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:z-[100] focus:bg-white focus:p-3">Skip to content</a>
+      <Sidebar />
+      <div className="min-w-0 lg:ml-[14rem]">
+        <Header />
+        <main id="main-content" className="mx-auto max-w-screen-2xl px-4 pt-5 pb-24 sm:px-7 sm:pt-8 lg:px-9 lg:pb-10">
+          <div key={pathname} className="workspace-enter">{children}</div>
         </main>
       </div>
-
-      {/* Mobile Bottom Navigation Bar */}
       <MobileBottomNav />
 
       {/* Global Drawers & Modals */}
@@ -100,10 +88,10 @@ export default function AppShell({ children }: AppShellProps) {
       <AddRentDuesDrawer />
       <CollectPaymentDrawer />
       <AddExpenseModal />
-      <AddRoomModal />
+      {isAddRoomOpen && <AddRoomModal />}
       <EditRoomModal />
       <AddComplaintModal />
-      <AddStaffModal />
+      {isAddStaffOpen && <AddStaffModal />}
       <AnnouncementsModal />
       <AddPropertyModal />
     </div>

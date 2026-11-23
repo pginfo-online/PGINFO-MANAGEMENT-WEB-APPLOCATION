@@ -1,5 +1,5 @@
-import RoomsInventoryTable from "@/components/rooms/RoomsInventoryTable";
+import PropertyWorkspace from "@/components/property/PropertyWorkspace";
 
 export default function PropertyPage() {
-  return <RoomsInventoryTable />;
+  return <PropertyWorkspace />;
 }

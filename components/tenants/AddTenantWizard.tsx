@@ -1,666 +1,199 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import {
-  ChevronLeft,
-  ChevronRight,
-  User,
-  Bed,
-  Calendar,
-  Receipt,
-  CheckCircle2,
-  AlertCircle,
-  Loader2,
-  Trash2,
-} from "lucide-react";
-import { usePropertyStore } from "@/lib/store";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/api/client";
-import { formatINR, cn } from "@/lib/utils";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { api } from "@/lib/api/client";
+import { usePropertyStore } from "@/lib/store";
+import { formatDate, formatINR } from "@/lib/utils";
+import { addCalendarMonths, maxPaise, openingRentDueDate, rentFrequencies, toPaise } from "@/lib/tenant-onboarding";
+import { PageHeading } from "../layout/WorkspaceUI";
+import AllocationFields, { type Allocation, useAllocationInventory } from "./AllocationFields";
+
+const dueTypes = ["RENT", "SECURITY_DEPOSIT", "ELECTRICITY", "WATER", "MAINTENANCE", "LATE_FEE", "OTHER"];
+const modes = ["UPI", "CASH", "BANK_TRANSFER", "CHEQUE", "OTHER"];
+const tenantTypes = ["STUDENT", "PROFESSIONAL", "BACHELOR", "FAMILY", "COUPLE", "STAFF", "OTHER"];
+const moneyField = { type: "number", step: ".01", min: "0", max: "21474836.47" } as const;
+
+interface Entry {
+  id: string;
+  kind: "due" | "collection";
+  type: string;
+  amount: string;
+  collected: string;
+  date: string;
+  end: string;
+  mode: string;
+  description: string;
+}
 
 export default function AddTenantWizard() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const preSelectedPropertyId = searchParams.get("propertyId");
-  const preSelectedRoomId = searchParams.get("roomId");
-  const preSelectedBedId = searchParams.get("bedId");
-  const preSelectedBedNumber = searchParams.get("bedNumber");
-  const queryClient = useQueryClient();
+  const params = useSearchParams();
+  const client = useQueryClient();
+  const selectedProperty = usePropertyStore((state) => state.selectedPropertyId);
+  const [allocation, setAllocation] = useState<Allocation>(() => ({
+    propertyId: params.get("propertyId") ?? selectedProperty ?? "",
+    roomId: params.get("roomId") ?? "",
+    bedId: params.get("bedId") ?? "",
+  }));
+  const [rent, setRent] = useState<string | null>(null);
+  const [deposit, setDeposit] = useState("0");
+  const [frequency, setFrequency] = useState(1);
+  const [includeRent, setIncludeRent] = useState(true);
+  const [start, setStart] = useState(() => new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()));
+  const [dueDay, setDueDay] = useState<string | null>(null);
+  const [entries, setEntries] = useState<Entry[]>([]);
+  const [error, setError] = useState("");
+  const onboardingKey = useRef<string | undefined>(undefined);
+  const inventory = useAllocationInventory(allocation);
+  const { property, selectedRoom, beds, detail } = inventory;
+  const suggestedRent = beds.find((bed) => bed.id === allocation.bedId)?.rentAmount ?? selectedRoom?.rentAmount;
+  const rentInput = rent ?? (suggestedRent == null ? "" : String(suggestedRent / 100));
+  const dueDayInput = dueDay ?? String(property.data?.rentDueDay ?? 1);
+  const rentPaise = toPaise(rentInput);
+  const depositPaise = toPaise(deposit);
+  const openingRent = (rentPaise || 0) * frequency;
+  const charges = (includeRent ? openingRent : 0) + (depositPaise || 0) + entries.reduce((sum, entry) => sum + (entry.kind === "due" ? toPaise(entry.amount) || 0 : 0), 0);
+  const applied = entries.reduce((sum, entry) => sum + (entry.kind === "due" ? toPaise(entry.collected) || 0 : 0), 0);
+  const standalone = entries.reduce((sum, entry) => sum + (entry.kind === "collection" ? toPaise(entry.amount) || 0 : 0), 0);
+  const openingDate = openingRentDueDate(start, Number(dueDayInput));
 
-  const { selectedPropertyId } = usePropertyStore();
-
-  const [step, setStep] = useState(1);
-
-  // Step 1: Personal Details
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [mobile, setMobile] = useState("");
-  const [email, setEmail] = useState("");
-  const [gender, setGender] = useState("MALE");
-  const [profession, setProfession] = useState("WORKING_PROFESSIONAL");
-
-  // Step 2: Room & Bed Allocation
-  const [propertyId, setPropertyId] = useState(preSelectedPropertyId || "");
-  const [roomId, setRoomId] = useState(preSelectedRoomId || "");
-  const [bedId, setBedId] = useState(preSelectedBedId || "");
-  const [monthlyRent, setMonthlyRent] = useState("12000");
-
-  // Step 3: Tenancy Duration
-  const [joiningDate, setJoiningDate] = useState(
-    new Date().toISOString().split("T")[0]
-  );
-  const [lockInMonths, setLockInMonths] = useState(6);
-  const [noticeDays, setNoticeDays] = useState(30);
-  const [rentCycleDay, setRentCycleDay] = useState(1);
-  const [securityDeposit, setSecurityDeposit] = useState("24000");
-
-  // Step 4: Initial Due Schedule Matrix
-  const [initialCollectionMode, setInitialCollectionMode] = useState<"UPI" | "CASH" | "PENDING">("UPI");
-  const [initialPaymentCollected, setInitialPaymentCollected] = useState(true);
-
-  // Load properties
-  const { data: propertiesData } = useQuery({
-    queryKey: ["properties"],
-    queryFn: () => api.properties.list(),
-  });
-  const properties = propertiesData?.data || [];
-
-  useEffect(() => {
-    if (!propertyId && properties.length > 0) {
-      setPropertyId(selectedPropertyId || properties[0].id);
-    }
-  }, [properties, selectedPropertyId, propertyId]);
-
-  // Load rooms for property
-  const { data: rooms } = useQuery({
-    queryKey: ["rooms", propertyId],
-    queryFn: () => (propertyId ? api.rooms.listByProperty(propertyId) : []),
-    enabled: !!propertyId,
-  });
-
-  const roomList = rooms || [];
-
-  useEffect(() => {
-    if (!roomId && roomList.length > 0) {
-      setRoomId(roomList[0].id);
-    }
-  }, [roomList, roomId]);
-
-  const selectedRoom = roomList.find((r) => r.id === roomId);
-  const beds = selectedRoom?.beds || [];
-  const vacantBeds = beds.filter((b: any) => b.status === "AVAILABLE");
-
-  useEffect(() => {
-    if (preSelectedBedId) {
-      setBedId(preSelectedBedId);
-    } else if (vacantBeds.length > 0 && !bedId) {
-      setBedId(vacantBeds[0].id);
-    }
-    if (selectedRoom?.rentAmount) {
-      setMonthlyRent(String(selectedRoom.rentAmount / 100));
-    }
-  }, [preSelectedBedId, vacantBeds, bedId, selectedRoom]);
-
-  // Pro-rata rent calculation
-  // Formula: Round(Monthly Rent * (Days Remaining in Month / Total Days in Month))
-  const calculateProRata = () => {
-    const rentNum = parseFloat(monthlyRent) || 0;
-    const dateObj = new Date(joiningDate);
-    const day = dateObj.getDate();
-    const year = dateObj.getFullYear();
-    const month = dateObj.getMonth();
-    const totalDaysInMonth = new Date(year, month + 1, 0).getDate();
-
-    if (day === 1) return rentNum;
-    const remainingDays = totalDaysInMonth - day + 1;
-    return Math.round((rentNum * remainingDays) / totalDaysInMonth);
-  };
-
-  const proRataRent = calculateProRata();
-  const depositNum = parseFloat(securityDeposit) || 0;
-  const totalInitialDue = proRataRent + depositNum;
-
-  // Mutation
-  const createResidentMutation = useMutation({
-    mutationFn: async () => {
-      const rentInPaise = Math.round(parseFloat(monthlyRent) * 100);
-      const depositInPaise = Math.round(depositNum * 100);
-
-      const resident = await api.residents.create({
-        propertyId,
-        roomId: roomId || undefined,
-        bedId: bedId || undefined,
-        firstName,
-        lastName: lastName || undefined,
-        mobile,
-        email: email || undefined,
-        profession,
-        monthlyRent: rentInPaise,
-        securityDeposit: depositInPaise,
-        joiningDate,
-      });
-
-      // If initial payment was collected, record it
-      if (initialPaymentCollected && resident?.id) {
-        await api.payments.record({
-          residentId: resident.id,
-          amount: totalInitialDue * 100,
-          mode: initialCollectionMode === "PENDING" ? "CASH" : initialCollectionMode,
-          collectionDate: joiningDate,
-          notes: "Initial Token + Pro-Rata Rent & Security Deposit",
-        });
-      }
-
-      return resident;
-    },
-    onSuccess: (res) => {
-      toast.success(`Resident ${firstName} successfully onboarded!`);
-      queryClient.invalidateQueries({ queryKey: ["residents"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboardMetrics"] });
-      queryClient.invalidateQueries({ queryKey: ["rooms"] });
-      router.push("/people/tenants");
-    },
-    onError: (err: any) => {
-      toast.error(err.message || "Failed to onboard resident");
+  const create = useMutation({
+    mutationFn: api.residents.create,
+    onSuccess(resident) {
+      for (const key of ["resident", "residents", "room", "rooms", "inventoryStats", "dashboardMetrics", "money", "billing", "payments"]) void client.invalidateQueries({ queryKey: [key] });
+      toast.success("Tenant added");
+      router.replace(`/people/tenants/${resident.id}`);
     },
   });
 
-  const handleNextStep = () => {
-    if (step === 1) {
-      if (!firstName.trim() || mobile.length < 10) {
-        toast.error("Please provide tenant full name and a valid 10-digit mobile number");
-        return;
-      }
-    }
-    if (step === 2) {
-      if (!roomId) {
-        toast.error("Please select a room");
-        return;
-      }
-    }
-    setStep((prev) => Math.min(prev + 1, 4));
-  };
+  function updateEntry(id: string, fields: Partial<Entry>) {
+    setEntries((items) => items.map((entry) => entry.id === id ? { ...entry, ...fields } : entry));
+  }
 
-  const handlePrevStep = () => {
-    setStep((prev) => Math.max(prev - 1, 1));
-  };
+  function addEntry(kind: Entry["kind"]) {
+    setEntries((items) => [...items, { id: crypto.randomUUID(), kind, type: "OTHER", amount: "", collected: "", date: start, end: "", mode: "UPI", description: "" }]);
+  }
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    createResidentMutation.mutate();
-  };
+  function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (create.isPending || create.isSuccess) return;
+    setError("");
+    const form = new FormData(event.currentTarget);
+    const field = (key: string) => String(form.get(key) ?? "").trim();
+    const fail = (message: string) => setError(message);
+    if (!property.data || (allocation.roomId && (!selectedRoom || !detail.isSuccess)) || (allocation.bedId && !beds.some((bed) => bed.id === allocation.bedId))) return fail("Check the property, room and bed selection.");
+    if (!field("firstName")) return fail("Enter the tenant’s first name.");
+    if (!(rentPaise > 0) || openingRent > maxPaise || !Number.isFinite(depositPaise)) return fail("Enter valid rent and deposit amounts. Rent for one billing period must fit within ₹2,14,74,836.47.");
+    if (!openingDate || (field("moveOut") && field("moveOut") < start)) return fail("Check the rent due day and stay dates.");
+    if (entries.some((entry) => !(toPaise(entry.amount) > 0) || !entry.date ||
+      (entry.kind === "due" && ((entry.collected !== "" && (!Number.isFinite(toPaise(entry.collected)) || toPaise(entry.collected) > toPaise(entry.amount))) || (entry.end && entry.end < entry.date))))) return fail("Check each opening entry. A payment applied to a due cannot exceed that due.");
+    const lockIn = Number(field("lockIn"));
+    // Keep the same identifier if the server saves the resident but the response is lost.
+    onboardingKey.current ??= crypto.randomUUID();
+    create.mutate({
+      onboardingKey: onboardingKey.current,
+      propertyId: allocation.propertyId,
+      roomId: allocation.roomId || undefined,
+      bedId: allocation.bedId || undefined,
+      firstName: field("firstName"), lastName: field("lastName"), mobile: field("mobile"),
+      email: field("email") || undefined,
+      alternatePhone: field("alternatePhone") || undefined,
+      parentName: field("parentName") || undefined,
+      parentPhone: field("parentPhone") || undefined,
+      sendWhatsappReminder: form.has("whatsapp"),
+      stayType: field("stayType"), tenantType: field("tenantType"),
+      profession: field("tenantType") === "STUDENT" ? "STUDENT" : field("tenantType") === "PROFESSIONAL" ? "WORKING_PROFESSIONAL" : "OTHER",
+      joiningDate: start, moveInDate: start, expectedVacatingDate: field("moveOut") || undefined,
+      lockInEndDate: lockIn ? addCalendarMonths(start, lockIn) : undefined,
+      noticePeriodDays: Number(field("notice")), agreementPeriodMonths: Number(field("agreement")),
+      monthlyRent: rentPaise, securityDeposit: depositPaise, rentDueDay: Number(dueDayInput),
+      rentalFrequencyMonths: frequency, initialRent: includeRent ? "CREATE" : "SKIP",
+      notes: field("notes"),
+      openingBalances: entries.map((entry) => ({
+        type: entry.kind === "due" ? entry.type : "OTHER",
+        amount: entry.kind === "due" ? toPaise(entry.amount) : 0,
+        collectedAmount: entry.kind === "collection" ? toPaise(entry.amount) : toPaise(entry.collected) || 0,
+        dueDate: entry.date, dueEndDate: entry.kind === "due" ? entry.end || undefined : undefined,
+        collectionDate: entry.date, collectionMode: entry.mode, description: entry.description.trim(),
+      })),
+    });
+  }
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6 pb-24 animate-in fade-in duration-300">
-      {/* Top Breadcrumb */}
-      <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
-        <Link href="/people/tenants" className="hover:text-blue-600 transition">
-          Tenants
-        </Link>
-        <span>/</span>
-        <span className="text-slate-900 font-bold">New Tenant Onboarding</span>
-      </div>
-
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Add New Tenant</h1>
-          <p className="text-xs text-slate-500 mt-1">
-            Allocate room inventory, configure tenancy agreement terms, and schedule initial dues
-          </p>
-        </div>
-      </div>
-
-      {/* 4-Step Progress Indicator */}
-      <div className="grid grid-cols-4 gap-2">
-        {[
-          { num: 1, label: "Personal Details" },
-          { num: 2, label: "Room & Bed" },
-          { num: 3, label: "Duration & Rent" },
-          { num: 4, label: "Due Schedule" },
-        ].map((s) => {
-          const isDone = step > s.num;
-          const isCurrent = step === s.num;
-          return (
-            <div
-              key={s.num}
-              onClick={() => {
-                if (isDone) setStep(s.num);
-              }}
-              className={cn(
-                "p-3 rounded-2xl border transition text-center cursor-pointer",
-                isCurrent
-                  ? "border-blue-600 bg-blue-50/50 text-blue-700 shadow-xs"
-                  : isDone
-                  ? "border-emerald-200 bg-emerald-50/40 text-emerald-700"
-                  : "border-slate-200 bg-white text-slate-400"
-              )}
-            >
-              <div className="flex items-center justify-center gap-1.5 text-xs font-bold">
-                {isDone ? (
-                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                ) : (
-                  <span>Step {s.num}</span>
-                )}
-              </div>
-              <span className="text-[11px] font-medium block truncate mt-0.5">
-                {s.label}
-              </span>
+    <div className="mx-auto max-w-4xl">
+      <PageHeading title="Add tenant" description="Enter their details, stay terms and opening balances." action={<Link href="/people/tenants" className="workspace-button">Back to tenants</Link>} />
+      <form className="workspace-form" onSubmit={submit}>
+        <fieldset className="space-y-5" disabled={create.isPending || create.isSuccess}>
+          <section className="workspace-card space-y-4 p-5">
+            <h2 className="text-lg font-semibold">Tenant details</h2>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label>First name<input name="firstName" required autoComplete="given-name" /></label>
+              <label>Last name<input name="lastName" autoComplete="family-name" /></label>
+              <label>Mobile<input name="mobile" required type="tel" pattern="[6-9][0-9]{9}" maxLength={10} /></label>
+              <label>Email (optional)<input name="email" type="email" /></label>
+              <label>Alternate phone (optional)<input name="alternatePhone" type="tel" pattern="[6-9][0-9]{9}" maxLength={10} /></label>
+              <label>Tenant type<select name="tenantType" defaultValue="PROFESSIONAL">{tenantTypes.map((type) => <option key={type} value={type}>{type.toLowerCase()}</option>)}</select></label>
+              <label>Parent name (optional)<input name="parentName" /></label>
+              <label>Parent phone (optional)<input name="parentPhone" type="tel" pattern="[6-9][0-9]{9}" maxLength={10} /></label>
             </div>
-          );
-        })}
-      </div>
-
-      {/* Step Form Container */}
-      <form onSubmit={handleSubmit} className="p-6 sm:p-8 rounded-3xl bg-white border border-slate-200/80 shadow-xs space-y-6">
-        {/* Pre-allocated Room/Bed Banner matching frame_024 */}
-        {preSelectedRoomId && (
-          <div className="flex items-center justify-between p-3.5 rounded-2xl bg-blue-50/80 border border-blue-200 text-blue-900 text-xs">
-            <div className="flex items-center gap-2">
-              <Bed className="h-4 w-4 text-[#2F54EB]" />
-              <span>
-                Pre-selected Inventory:{" "}
-                <strong className="font-bold">
-                  Room {selectedRoom?.roomNumber || "101"} -{" "}
-                  {preSelectedBedNumber || "Bed"}
-                </strong>{" "}
-                ({formatINR(selectedRoom?.rentAmount || 1200000)}/mo)
-              </span>
+            <label className="!flex items-center gap-2"><input className="max-w-4" type="checkbox" name="whatsapp" defaultChecked /> Enable WhatsApp reminders</label>
+          </section>
+          <section className="workspace-card space-y-4 p-5">
+            <h2 className="text-lg font-semibold">Stay and rent</h2>
+            <AllocationFields value={allocation} change={setAllocation} inventory={inventory} />
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <label>Move-in date<input type="date" required value={start} onChange={(event) => setStart(event.target.value)} /></label>
+              <label>Expected move-out (optional)<input name="moveOut" type="date" min={start} /></label>
+              <label>Stay type<select name="stayType"><option value="LONG_TERM">Long term</option><option value="SHORT_TERM">Short term</option></select></label>
+              <label>Monthly rent (₹)<input {...moneyField} min=".01" required value={rentInput} onChange={(event) => setRent(event.target.value)} /></label>
+              <label>Security deposit (₹)<input {...moneyField} required value={deposit} onChange={(event) => setDeposit(event.target.value)} /></label>
+              <label>Rental frequency<select value={frequency} onChange={(event) => setFrequency(Number(event.target.value))}>{rentFrequencies.map((months) => <option value={months} key={months}>{months === 1 ? "Monthly" : `Every ${months} months`}</option>)}</select></label>
+              <label>Rent due day<input type="number" required min={1} max={28} value={dueDayInput} onChange={(event) => setDueDay(event.target.value)} /></label>
+              <label>Lock-in (months)<input name="lockIn" type="number" min={0} max={120} defaultValue={0} required /></label>
+              <label>Notice period (days)<input name="notice" type="number" min={0} max={365} defaultValue={30} required /></label>
+              <label>Agreement (months)<input name="agreement" type="number" min={1} max={120} defaultValue={11} required /></label>
+              <label className="sm:col-span-2">Remarks (optional)<textarea name="notes" rows={2} /></label>
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                router.replace("/people/tenants/addTenant");
-              }}
-              className="text-xs text-blue-600 hover:text-blue-800 font-semibold underline cursor-pointer"
-            >
-              Change
-            </button>
-          </div>
-        )}
-
-        {/* Step 1: Personal Details */}
-        {step === 1 && (
-          <div className="space-y-4 animate-in fade-in duration-200">
-            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <User className="h-4 w-4 text-blue-600" />
-              <span>Step 1: Resident Personal Details</span>
-            </h3>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  First Name <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                  placeholder="e.g. Vikram"
-                  required
-                  className="w-full rounded-xl border border-slate-200 p-2.5 text-sm font-semibold focus:ring-2 focus:ring-blue-500"
-                />
+          </section>
+          <section className="workspace-card space-y-4 p-5">
+            <h2 className="text-lg font-semibold">Opening balances</h2>
+            <label className="!flex items-center gap-2"><input className="max-w-4" type="checkbox" checked={includeRent} onChange={(event) => setIncludeRent(event.target.checked)} /> Create opening rent {includeRent && openingDate ? `due ${formatDate(openingDate)}` : ""}</label>
+            <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
+              <div><dt>Opening rent</dt><dd className="font-semibold">{formatINR(includeRent ? openingRent : 0)}</dd></div>
+              <div><dt>Security deposit</dt><dd className="font-semibold">{formatINR(depositPaise)}</dd></div>
+              <div><dt>Total charges</dt><dd className="font-semibold">{formatINR(charges)}</dd></div>
+              <div><dt>Applied collections</dt><dd className="font-semibold">{formatINR(applied)}</dd></div>
+              <div><dt>Standalone collections</dt><dd className="font-semibold">{formatINR(standalone)}</dd></div>
+              <div><dt>Outstanding on creation</dt><dd className="font-semibold">{formatINR(charges - applied)}</dd></div>
+            </dl>
+            {entries.map((entry, index) => (
+              <div className="space-y-3 rounded-lg border border-slate-200 p-4" key={entry.id}>
+                <div className="flex items-center justify-between gap-3"><h3 className="font-semibold">{entry.kind === "due" ? "Due" : "Collection"} {index + 1}</h3><button className="workspace-button" type="button" onClick={() => setEntries((items) => items.filter((item) => item.id !== entry.id))}>Remove</button></div>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {entry.kind === "due" && <label>Due type<select value={entry.type} onChange={(event) => updateEntry(entry.id, { type: event.target.value })}>{dueTypes.map((type) => <option key={type} value={type}>{type.replaceAll("_", " ").toLowerCase()}</option>)}</select></label>}
+                  <label>Amount (₹)<input {...moneyField} min=".01" required value={entry.amount} onChange={(event) => updateEntry(entry.id, { amount: event.target.value })} /></label>
+                  <label>{entry.kind === "due" ? "Due date" : "Collection date"}<input type="date" required value={entry.date} onChange={(event) => updateEntry(entry.id, { date: event.target.value })} /></label>
+                  {entry.kind === "due" && <>
+                    <label>Period end (optional)<input type="date" min={entry.date} value={entry.end} onChange={(event) => updateEntry(entry.id, { end: event.target.value })} /></label>
+                    <label>Already collected (₹)<input {...moneyField} value={entry.collected} onChange={(event) => updateEntry(entry.id, { collected: event.target.value })} /></label>
+                  </>}
+                  {(entry.kind === "collection" || Number(entry.collected) > 0) && <label>Payment method<select value={entry.mode} onChange={(event) => updateEntry(entry.id, { mode: event.target.value })}>{modes.map((mode) => <option key={mode}>{mode}</option>)}</select></label>}
+                  <label>Note (optional)<input maxLength={500} value={entry.description} onChange={(event) => updateEntry(entry.id, { description: event.target.value })} /></label>
+                </div>
               </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Last Name
-                </label>
-                <input
-                  type="text"
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  placeholder="e.g. Joshi"
-                  className="w-full rounded-xl border border-slate-200 p-2.5 text-sm focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
+            ))}
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className="workspace-button" disabled={entries.length >= 20} onClick={() => addEntry("due")}>Add due</button>
+              <button type="button" className="workspace-button" disabled={entries.length >= 20} onClick={() => addEntry("collection")}>Add collection</button>
             </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Mobile Number (10 Digits) <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="tel"
-                  value={mobile}
-                  onChange={(e) => setMobile(e.target.value)}
-                  placeholder="9876543210"
-                  required
-                  maxLength={10}
-                  className="w-full rounded-xl border border-slate-200 p-2.5 text-sm font-mono font-bold focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Email Address (Optional)
-                </label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="resident@example.com"
-                  className="w-full rounded-xl border border-slate-200 p-2.5 text-sm focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Gender
-                </label>
-                <select
-                  value={gender}
-                  onChange={(e) => setGender(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 p-2.5 text-sm bg-white"
-                >
-                  <option value="MALE">Male</option>
-                  <option value="FEMALE">Female</option>
-                  <option value="OTHER">Other</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Profession
-                </label>
-                <select
-                  value={profession}
-                  onChange={(e) => setProfession(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 p-2.5 text-sm bg-white"
-                >
-                  <option value="WORKING_PROFESSIONAL">Working Professional</option>
-                  <option value="STUDENT">Student</option>
-                  <option value="SELF_EMPLOYED">Self Employed</option>
-                  <option value="OTHER">Other</option>
-                </select>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Step 2: Room & Inventory Allocation */}
-        {step === 2 && (
-          <div className="space-y-4 animate-in fade-in duration-200">
-            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <Bed className="h-4 w-4 text-blue-600" />
-              <span>Step 2: Room & Inventory Allocation</span>
-            </h3>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Property
-                </label>
-                <select
-                  value={propertyId}
-                  onChange={(e) => setPropertyId(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 p-2.5 text-sm bg-white font-medium"
-                >
-                  {properties.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} ({p.city})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Select Room
-                </label>
-                <select
-                  value={roomId}
-                  onChange={(e) => {
-                    setRoomId(e.target.value);
-                    setBedId("");
-                  }}
-                  className="w-full rounded-xl border border-slate-200 p-2.5 text-sm bg-white font-bold"
-                >
-                  {roomList.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      Room {r.roomNumber} ({r.floor || "Ground Floor"} - {r.sharingType})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Select Bed (Vacant Only)
-                </label>
-                <select
-                  value={bedId}
-                  onChange={(e) => setBedId(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 p-2.5 text-sm bg-white font-bold text-blue-600"
-                >
-                  {vacantBeds.length === 0 ? (
-                    <option value="">No beds currently vacant</option>
-                  ) : (
-                    vacantBeds.map((b: any) => (
-                      <option key={b.id} value={b.id}>
-                        {b.bedNumber} (Vacant)
-                      </option>
-                    ))
-                  )}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Contracted Monthly Rent (₹)
-                </label>
-                <input
-                  type="number"
-                  value={monthlyRent}
-                  onChange={(e) => setMonthlyRent(e.target.value)}
-                  required
-                  className="w-full rounded-xl border border-slate-200 p-2.5 text-sm font-bold text-slate-900"
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Step 3: Tenancy Duration & Rent Structure */}
-        {step === 3 && (
-          <div className="space-y-4 animate-in fade-in duration-200">
-            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-blue-600" />
-              <span>Step 3: Tenancy Duration & Rent Structure</span>
-            </h3>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Joining Date
-                </label>
-                <input
-                  type="date"
-                  value={joiningDate}
-                  onChange={(e) => setJoiningDate(e.target.value)}
-                  required
-                  className="w-full rounded-xl border border-slate-200 p-2.5 text-sm bg-white font-medium"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Security Deposit Amount (₹)
-                </label>
-                <input
-                  type="number"
-                  value={securityDeposit}
-                  onChange={(e) => setSecurityDeposit(e.target.value)}
-                  required
-                  className="w-full rounded-xl border border-slate-200 p-2.5 text-sm font-bold text-slate-900"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Lock-In Period (Months)
-                </label>
-                <input
-                  type="number"
-                  value={lockInMonths}
-                  onChange={(e) => setLockInMonths(Number(e.target.value))}
-                  min="0"
-                  className="w-full rounded-xl border border-slate-200 p-2.5 text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Notice Period (Days)
-                </label>
-                <input
-                  type="number"
-                  value={noticeDays}
-                  onChange={(e) => setNoticeDays(Number(e.target.value))}
-                  min="0"
-                  className="w-full rounded-xl border border-slate-200 p-2.5 text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Rental Cycle Day
-                </label>
-                <input
-                  type="number"
-                  value={rentCycleDay}
-                  onChange={(e) => setRentCycleDay(Number(e.target.value))}
-                  min="1"
-                  max="28"
-                  className="w-full rounded-xl border border-slate-200 p-2.5 text-sm"
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Step 4: Initial Due Schedule Matrix matching Section 6.2 Table */}
-        {step === 4 && (
-          <div className="space-y-4 animate-in fade-in duration-200">
-            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <Receipt className="h-4 w-4 text-blue-600" />
-              <span>Step 4: Initial Due Schedule Matrix</span>
-            </h3>
-
-            <div className="rounded-2xl border border-slate-200 overflow-hidden">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 border-b border-slate-200 font-bold text-slate-500 uppercase tracking-wider">
-                  <tr>
-                    <th className="p-3">DUE TYPE</th>
-                    <th className="p-3">DUE FOR</th>
-                    <th className="p-3">DUE AMOUNT</th>
-                    <th className="p-3">COLLECTION</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 font-medium">
-                  <tr>
-                    <td className="p-3 font-bold text-slate-900">Pro-Rata Rent</td>
-                    <td className="p-3 text-slate-500">
-                      From {joiningDate} to end of month
-                    </td>
-                    <td className="p-3 font-bold text-slate-900">
-                      ₹{proRataRent.toLocaleString("en-IN")}
-                    </td>
-                    <td className="p-3 text-emerald-600 font-bold">Included</td>
-                  </tr>
-                  <tr>
-                    <td className="p-3 font-bold text-slate-900">Security Deposit</td>
-                    <td className="p-3 text-slate-500">Refundable caution deposit</td>
-                    <td className="p-3 font-bold text-slate-900">
-                      ₹{depositNum.toLocaleString("en-IN")}
-                    </td>
-                    <td className="p-3 text-emerald-600 font-bold">Included</td>
-                  </tr>
-                  <tr className="bg-blue-50/50 font-bold">
-                    <td className="p-3" colSpan={2}>
-                      Total Move-In Payable
-                    </td>
-                    <td className="p-3 text-blue-600 text-sm">
-                      ₹{totalInitialDue.toLocaleString("en-IN")}
-                    </td>
-                    <td className="p-3">
-                      <select
-                        value={initialCollectionMode}
-                        onChange={(e) => setInitialCollectionMode(e.target.value as any)}
-                        className="rounded-lg border border-slate-300 p-1 text-xs bg-white font-semibold"
-                      >
-                        <option value="UPI">Pay via UPI</option>
-                        <option value="CASH">Pay via Cash</option>
-                        <option value="PENDING">Mark as Pending</option>
-                      </select>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between">
-              <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={initialPaymentCollected}
-                  onChange={(e) => setInitialPaymentCollected(e.target.checked)}
-                  className="h-4 w-4 rounded text-blue-600 focus:ring-blue-500"
-                />
-                <span>Record initial token / deposit payment immediately</span>
-              </label>
-            </div>
-          </div>
-        )}
-
-        {/* Wizard Footer Buttons */}
-        <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
-          {step > 1 ? (
-            <button
-              type="button"
-              onClick={handlePrevStep}
-              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
-            >
-              <ChevronLeft className="h-4 w-4" />
-              <span>Back</span>
-            </button>
-          ) : (
-            <div />
-          )}
-
-          {step < 4 ? (
-            <button
-              type="button"
-              onClick={handleNextStep}
-              className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-md shadow-blue-500/20 transition cursor-pointer"
-            >
-              <span>Continue</span>
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          ) : (
-            <button
-              type="submit"
-              disabled={createResidentMutation.isPending}
-              className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-md shadow-emerald-500/20 transition cursor-pointer disabled:opacity-50"
-            >
-              {createResidentMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <CheckCircle2 className="h-4 w-4" />
-              )}
-              <span>Complete Admission</span>
-            </button>
-          )}
-        </div>
+          </section>
+        </fieldset>
+        {(error || create.error) && <p role="alert" className="mt-4 text-sm text-rose-700">{error || create.error?.message}</p>}
+        <div className="mt-5 flex justify-end"><button className="workspace-button primary" disabled={create.isPending || create.isSuccess}>{create.isPending ? "Saving…" : "Add tenant"}</button></div>
       </form>
     </div>
   );

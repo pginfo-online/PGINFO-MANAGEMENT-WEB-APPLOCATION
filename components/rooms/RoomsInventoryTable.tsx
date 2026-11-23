@@ -37,6 +37,7 @@ import { formatINR, cn } from "@/lib/utils";
 import { toast } from "sonner";
 import ChooseBedsModal from "@/components/drawers/ChooseBedsModal";
 import RoomDrawer from "@/components/drawers/RoomDrawer";
+import { PageHeading, QueryError, Skeleton } from "../layout/WorkspaceUI";
 
 interface RoomFilterState {
   search: string;
@@ -52,7 +53,7 @@ interface RoomFilterState {
 export default function RoomsInventoryTable() {
   const queryClient = useQueryClient();
   const { selectedPropertyId } = usePropertyStore();
-  const { setAddRoomOpen, setEditRoomOpen } = useUiStore();
+  const { setAddRoomOpen, setEditRoomOpen, setPropertySelectorOpen } = useUiStore();
 
   // Collapsible Overview Cards state
   const [isOverviewExpanded, setIsOverviewExpanded] = useState(true);
@@ -78,17 +79,10 @@ export default function RoomsInventoryTable() {
   const [isChooseBedsOpen, setIsChooseBedsOpen] = useState(false);
   const [activeMenuRoomId, setActiveMenuRoomId] = useState<string | null>(null);
 
-  // Load Properties
-  const { data: propertiesData } = useQuery({
-    queryKey: ["properties"],
-    queryFn: () => api.properties.list(),
-  });
-
-  const properties = propertiesData?.data || [];
-  const propertyId = selectedPropertyId || (properties[0]?.id ?? "");
+  const propertyId = selectedPropertyId ?? "";
 
   // Load Rooms for property
-  const { data: rooms, isLoading: isRoomsLoading } = useQuery({
+  const { data: rooms, isLoading: isRoomsLoading, error: roomsError, refetch } = useQuery({
     queryKey: ["rooms", propertyId],
     queryFn: async () => {
       if (!propertyId) return [];
@@ -505,6 +499,9 @@ export default function RoomsInventoryTable() {
     },
   ];
 
+  if (!propertyId) return <PageHeading title="Room inventory" description="Choose a property to view and manage its room inventory." action={<button className="workspace-button primary" onClick={() => setPropertySelectorOpen(true)}>Choose property</button>} />;
+  if (roomsError) return <QueryError error={roomsError} retry={() => void refetch()} />;
+
   return (
     <div className="space-y-5 pb-24 animate-in fade-in duration-300">
       {/* 1. Header Bar matching ref-1 */}
@@ -546,12 +543,7 @@ export default function RoomsInventoryTable() {
           </div>
 
           {/* Cleaning Checklist Button */}
-          <button
-            onClick={() => toast.info("Cleaning Checklist viewer opened")}
-            className="hidden md:flex items-center gap-1.5 px-3.5 py-2 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold shadow-xs transition cursor-pointer shrink-0"
-          >
-            <span>Cleaning Checklist</span>
-          </button>
+
 
           {/* Timeline Button */}
           <Link
@@ -830,8 +822,7 @@ export default function RoomsInventoryTable() {
               {isRoomsLoading ? (
                 <tr>
                   <td colSpan={5} className="py-16 text-center text-slate-400">
-                    <Loader2 className="h-7 w-7 animate-spin mx-auto mb-2 text-[#2F54EB]" />
-                    <span className="font-medium text-xs">Loading rooms inventory...</span>
+                    <Skeleton count={4} />
                   </td>
                 </tr>
               ) : groupedRooms.length === 0 ? (

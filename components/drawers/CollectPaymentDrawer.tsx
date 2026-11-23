@@ -1,298 +1,139 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import {
-  X,
-  CreditCard,
-  QrCode,
-  Banknote,
-  Building,
-  CheckCircle2,
-  Loader2,
-} from "lucide-react";
-import { useUiStore } from "@/lib/store";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/api/client";
-import { formatINR } from "@/lib/utils";
+import { useDeferredValue, useRef, useState } from "react";
+import * as Dialog from "@radix-ui/react-dialog";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { X } from "lucide-react";
 import { toast } from "sonner";
+import { api } from "@/lib/api/client";
+import { usePropertyStore, useUiStore } from "@/lib/store";
+import { formatDate, formatINR } from "@/lib/utils";
+import { QueryError, Skeleton } from "../layout/WorkspaceUI";
+
+function propertyToday() {
+  return new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+}
 
 export default function CollectPaymentDrawer() {
-  const {
-    isReceivePaymentOpen,
-    setReceivePaymentOpen,
-    selectedResidentForPayment,
-    setSelectedResidentForPayment,
-  } = useUiStore();
-  const queryClient = useQueryClient();
-
-  const [residentId, setResidentId] = useState("");
-  const [amount, setAmount] = useState("");
-  const [mode, setMode] = useState<"UPI" | "CASH" | "BANK_TRANSFER" | "CHEQUE">("UPI");
-  const [collectionDate, setCollectionDate] = useState(
-    new Date().toISOString().split("T")[0]
-  );
-  const [reference, setReference] = useState("");
-  const [notes, setNotes] = useState("");
-
-  const { data: residentsData } = useQuery({
-    queryKey: ["residents"],
-    queryFn: () => api.residents.list({ limit: 100 }),
-    enabled: isReceivePaymentOpen,
-  });
-
-  const residents = residentsData?.data || [];
-
-  useEffect(() => {
-    if (selectedResidentForPayment) {
-      setResidentId(selectedResidentForPayment.id);
-      if (selectedResidentForPayment.pendingDues) {
-        setAmount(String(selectedResidentForPayment.pendingDues / 100));
-      } else if (selectedResidentForPayment.monthlyRent) {
-        setAmount(String(selectedResidentForPayment.monthlyRent / 100));
-      }
-    } else if (residents.length > 0 && !residentId) {
-      setResidentId(residents[0].id);
-      if (residents[0].monthlyRent) {
-        setAmount(String(residents[0].monthlyRent / 100));
-      }
-    }
-  }, [selectedResidentForPayment, residents, residentId]);
-
-  const recordPaymentMutation = useMutation({
-    mutationFn: async () => {
-      const amountInPaise = Math.round(parseFloat(amount) * 100);
-      return api.payments.record({
-        residentId,
-        amount: amountInPaise,
-        mode,
-        collectionDate,
-        reference: reference || `REF-${Date.now()}`,
-        notes: notes || "Rent payment received",
-      });
-    },
-    onSuccess: (data) => {
-      toast.success("Payment recorded successfully!");
-      queryClient.invalidateQueries({ queryKey: ["dashboardMetrics"] });
-      queryClient.invalidateQueries({ queryKey: ["payments"] });
-      queryClient.invalidateQueries({ queryKey: ["billing"] });
-      queryClient.invalidateQueries({ queryKey: ["residents"] });
-      closeDrawer();
-    },
-    onError: (err: any) => {
-      toast.error(err.message || "Failed to record payment");
-    },
-  });
-
-  const closeDrawer = () => {
-    setReceivePaymentOpen(false);
-    setSelectedResidentForPayment(null);
-    setReference("");
-    setNotes("");
-  };
-
+  const { isReceivePaymentOpen, selectedResidentForPayment } = useUiStore();
   if (!isReceivePaymentOpen) return null;
+  return <PaymentForm initialResident={selectedResidentForPayment} />;
+}
 
-  const currentResident = residents.find((r) => r.id === residentId);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!residentId) {
-      toast.error("Please select a resident");
-      return;
-    }
-    const amt = parseFloat(amount);
-    if (isNaN(amt) || amt <= 0) {
-      toast.error("Please enter a valid payment amount");
-      return;
-    }
-    recordPaymentMutation.mutate();
-  };
+function PaymentForm({ initialResident }: { initialResident: { id: string; firstName: string; lastName?: string; billingRecordId?: string } | null }) {
+  const client = useQueryClient();
+  const close = useUiStore((state) => state.setSelectedResidentForPayment);
+  const propertyId = usePropertyStore((state) => state.selectedPropertyId) ?? undefined;
+  const [residentId, setResidentId] = useState(initialResident?.id ?? "");
+  const [search, setSearch] = useState("");
+  const [amount, setAmount] = useState<string | null>(null);
+  const [selectedBill, setSelectedBill] = useState(initialResident?.billingRecordId ?? "");
+  const [error, setError] = useState("");
+  const previousCommand = useRef<{ signature: string; id: string } | null>(null);
+  const term = useDeferredValue(search.trim());
+  const residents = useQuery({
+    queryKey: ["residents", "payment-picker", propertyId, term],
+    queryFn: () => api.residents.list({ propertyId, search: term, limit: 25 }),
+    enabled: !initialResident,
+  });
+  const context = useQuery({
+    queryKey: ["money", "payment-context", residentId],
+    queryFn: ({ signal }) => api.money.paymentContext(residentId, signal),
+    enabled: !!residentId,
+  });
+  const mutation = useMutation({
+    mutationFn: api.money.record,
+    onSuccess() {
+      for (const key of ["money", "dashboardMetrics", "billing", "payments", "residents", "resident"]) {
+        void client.invalidateQueries({ queryKey: [key] });
+      }
+      toast.success("Payment recorded");
+      close(null);
+    },
+  });
+  const bills = context.data?.bills ?? [];
+  const eligible = selectedBill ? bills.filter((bill) => bill.id === selectedBill) : bills;
+  const available = eligible.reduce((total, bill) => total + bill.amount - bill.paidAmount, 0);
+  const displayedAmount = amount ?? (available ? (available / 100).toFixed(2) : "");
+  const today = propertyToday();
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex justify-end animate-in fade-in duration-200"
-      onClick={closeDrawer}
-    >
-      <div
-        className="w-full max-w-md bg-white h-full shadow-2xl flex flex-col justify-between text-slate-800 animate-in slide-in-from-right duration-300"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
-              <CreditCard className="h-4 w-4" />
-            </div>
-            <h2 className="text-lg font-bold text-slate-900">Receive Payment</h2>
+    <Dialog.Root open onOpenChange={(open) => { if (!open && !mutation.isPending) close(null); }}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="workspace-overlay" />
+        <Dialog.Content className="workspace-dialog">
+          <div className="flex justify-between gap-3">
+            <div><Dialog.Title className="text-xl font-semibold">Record payment</Dialog.Title><Dialog.Description className="mt-1 text-sm text-slate-600">Apply an offline payment to outstanding dues.</Dialog.Description></div>
+            <Dialog.Close className="workspace-icon" aria-label="Close payment form" disabled={mutation.isPending}><X className="size-5" /></Dialog.Close>
           </div>
-          <button
-            onClick={closeDrawer}
-            className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition cursor-pointer"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        {/* Form Body */}
-        <form onSubmit={handleSubmit} className="flex-1 flex flex-col justify-between p-5 overflow-y-auto">
-          <div className="space-y-4">
-            {/* Resident Selector */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Select Tenant / Resident
-              </label>
-              <select
-                value={residentId}
-                onChange={(e) => setResidentId(e.target.value)}
-                required
-                className="w-full rounded-xl border border-slate-200 p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 font-medium"
-              >
-                {residents.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.firstName} {r.lastName || ""} (Room {r.room?.roomNumber || "-"}, {r.mobile})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {currentResident && (
-              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 text-xs flex justify-between items-center">
-                <div>
-                  <span className="text-slate-500 block">Contract Monthly Rent</span>
-                  <span className="font-bold text-slate-900 text-sm">
-                    {formatINR(currentResident.monthlyRent)}
-                  </span>
+          <form className="workspace-form mt-5" onSubmit={(event) => {
+            event.preventDefault();
+            if (mutation.isPending || !context.data) return;
+            setError("");
+            const form = new FormData(event.currentTarget);
+            const paise = Math.round(Number(form.get("amount")) * 100);
+            if (!Number.isSafeInteger(paise) || paise <= 0 || paise > available || paise > 2147483647) {
+              setError("Enter a payment amount within the outstanding balance.");
+              return;
+            }
+            let remaining = paise;
+            const allocations = [];
+            for (const bill of eligible) {
+              if (!remaining) break;
+              const applied = Math.min(remaining, bill.amount - bill.paidAmount);
+              allocations.push({ billingRecordId: bill.id, amount: applied });
+              remaining -= applied;
+            }
+            if (allocations.length > 100) {
+              setError("Record payments for up to 100 dues at a time.");
+              return;
+            }
+            const payment = {
+              residentId, amount: paise, allocations,
+              mode: String(form.get("mode")),
+              collectionDate: String(form.get("collectionDate")),
+              notes: String(form.get("notes")).trim() || undefined,
+            };
+            const signature = JSON.stringify(payment);
+            if (previousCommand.current?.signature !== signature) {
+              previousCommand.current = { signature, id: crypto.randomUUID() };
+            }
+            mutation.mutate({ ...payment, idempotencyKey: previousCommand.current.id });
+          }}>
+            <fieldset disabled={mutation.isPending} className="space-y-4">
+              {initialResident ? <p className="workspace-tag inline-block">{[initialResident.firstName, initialResident.lastName].filter(Boolean).join(" ")}</p> : <>
+                <label>Find tenant<input maxLength={120} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by name or phone" /></label>
+                {residents.isPending && <Skeleton count={1} />}
+                {residents.error && <QueryError error={residents.error} retry={() => void residents.refetch()} />}
+                <label>Tenant<select required value={residentId} onChange={(event) => { setResidentId(event.target.value); setAmount(null); setSelectedBill(""); }}>
+                  <option value="">Choose a tenant</option>
+                  {residents.data?.data.map((resident) => <option key={resident.id} value={resident.id}>{[resident.firstName, resident.lastName, resident.mobile].filter(Boolean).join(" ")}</option>)}
+                </select></label>
+              </>}
+              {residentId && context.isPending && <Skeleton count={2} />}
+              {context.error && <QueryError error={context.error} retry={() => void context.refetch()} />}
+              {context.isSuccess && bills.length === 0 && <p className="text-sm text-slate-600">This tenant has no outstanding dues.</p>}
+              {bills.length > 0 && <>
+                <label>Apply payment to<select value={selectedBill} onChange={(event) => { setSelectedBill(event.target.value); setAmount(null); }}>
+                  <option value="">Oldest dues first</option>
+                  {bills.map((bill) => <option key={bill.id} value={bill.id}>{bill.type.replaceAll("_", " ")} · {formatDate(bill.dueDate)} · {formatINR(bill.amount - bill.paidAmount)}</option>)}
+                </select></label>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label>Amount (₹)<input name="amount" type="number" min=".01" max={Math.min(available, 2147483647) / 100} step=".01" required value={displayedAmount} onChange={(event) => setAmount(event.target.value)} /></label>
+                  <label>Date received<input name="collectionDate" type="date" max={today} defaultValue={today} required /></label>
                 </div>
-                <div>
-                  <span className="text-slate-500 block">Security Deposit</span>
-                  <span className="font-bold text-slate-900 text-sm">
-                    {formatINR(currentResident.securityDeposit)}
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {/* Payment Amount */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Amount Received (₹)
-              </label>
-              <div className="relative">
-                <span className="absolute left-3.5 top-2.5 text-slate-400 font-bold">
-                  ₹
-                </span>
-                <input
-                  type="number"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  placeholder="24000"
-                  required
-                  min="1"
-                  className="w-full rounded-xl border border-slate-200 pl-8 pr-4 py-2.5 text-base font-bold text-slate-900 focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
+                <label>Payment method<select name="mode"><option value="UPI">UPI</option><option value="CASH">Cash</option><option value="BANK_TRANSFER">Bank transfer</option><option value="CHEQUE">Cheque</option></select></label>
+                <label>Notes or reference (optional)<textarea name="notes" maxLength={1000} rows={2} /></label>
+              </>}
+            </fieldset>
+            {(error || mutation.error) && <p role="alert" className="mt-4 text-sm text-rose-700">{error || mutation.error?.message}</p>}
+            <div className="mt-5 flex justify-end gap-2">
+              <Dialog.Close className="workspace-button" disabled={mutation.isPending}>Cancel</Dialog.Close>
+              <button className="workspace-button primary" disabled={mutation.isPending || !eligible.length}>{mutation.isPending ? "Recording…" : "Record payment"}</button>
             </div>
-
-            {/* Payment Mode Selector */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-2">
-                Payment Mode
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  { id: "UPI", label: "UPI / QR", icon: QrCode },
-                  { id: "CASH", label: "Cash", icon: Banknote },
-                  { id: "BANK_TRANSFER", label: "Bank Transfer", icon: Building },
-                  { id: "CHEQUE", label: "Cheque", icon: CreditCard },
-                ].map((item) => {
-                  const isSelected = mode === item.id;
-                  const Icon = item.icon;
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => setMode(item.id as any)}
-                      className={`flex items-center gap-2.5 p-2.5 rounded-xl border text-xs font-semibold transition cursor-pointer ${
-                        isSelected
-                          ? "border-emerald-500 bg-emerald-50/50 text-emerald-800"
-                          : "border-slate-200 hover:bg-slate-50 text-slate-700"
-                      }`}
-                    >
-                      <Icon className="h-4 w-4" />
-                      <span>{item.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Collection Date */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Paid On (Date)
-              </label>
-              <input
-                type="date"
-                value={collectionDate}
-                onChange={(e) => setCollectionDate(e.target.value)}
-                required
-                className="w-full rounded-xl border border-slate-200 p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            {/* Reference Number */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Transaction Reference / UTR / Cheque #
-              </label>
-              <input
-                type="text"
-                value={reference}
-                onChange={(e) => setReference(e.target.value)}
-                placeholder="e.g. UPI/20261101/987654321"
-                className="w-full rounded-xl border border-slate-200 p-2.5 text-sm focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            {/* Notes */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Receipt Note
-              </label>
-              <input
-                type="text"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="e.g. Cleared November Rent"
-                className="w-full rounded-xl border border-slate-200 p-2.5 text-sm focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-          </div>
-
-          {/* Footer Submit */}
-          <div className="pt-4 border-t border-slate-100 flex items-center gap-3 mt-6">
-            <button
-              type="button"
-              onClick={closeDrawer}
-              className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={recordPaymentMutation.isPending}
-              className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold shadow-md shadow-emerald-500/20 transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-            >
-              {recordPaymentMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <CheckCircle2 className="h-4 w-4" />
-              )}
-              <span>Record Payment</span>
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+          </form>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }

@@ -1,98 +1,49 @@
 "use client";
 
-import React, { useState } from "react";
-import { Settings, Shield, Building, FileText, Bell, Sparkles, CheckCircle2 } from "lucide-react";
-import { toast } from "sonner";
+import { useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { authActions, authStorage, api } from "@/lib/api/client";
+import { usePropertyStore } from "@/lib/store";
+import AddPropertyModal from "../drawers/AddPropertyModal";
+import { PageHeading, QueryError, Skeleton } from "../layout/WorkspaceUI";
 
 export default function SettingsView() {
-  const [orgName, setOrgName] = useState("RentOk Living");
-  const [rentDueDay, setRentDueDay] = useState(1);
-  const [gracePeriodDays, setGracePeriodDays] = useState(5);
-  const [lateFeeAmount, setLateFeeAmount] = useState(500);
-
-  const handleSave = (e: React.FormEvent) => {
-    e.preventDefault();
-    toast.success("Organization settings & billing rules saved!");
-  };
+  const user = authStorage.getUser();
+  const propertyId = usePropertyStore((state) => state.selectedPropertyId);
+  const [editProperty, setEditProperty] = useState(false);
+  const organizations = useQuery({ queryKey: ["organizations"], queryFn: api.auth.listOrgs });
+  const change = useMutation({ mutationFn: authActions.selectOrganization });
+  const active = authStorage.getOrgId();
 
   return (
-    <div className="space-y-6 pb-20 animate-in fade-in duration-300 max-w-3xl">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Organization & Billing Settings</h1>
-        <p className="text-xs text-slate-500 mt-1">
-          Configure default rental cycle rules, grace periods, automated late penalties, and branding
-        </p>
+    <>
+      <PageHeading title="Settings" description="Manage your account and switch between workspaces." />
+      <div className="grid items-start gap-4 lg:grid-cols-2">
+        <section className="workspace-card space-y-3 p-5">
+          <h2 className="text-lg font-semibold">Account</h2>
+          <p className="font-medium">{[user?.firstName, user?.lastName].filter(Boolean).join(" ")}</p>
+          <p className="break-all text-sm text-slate-600">{user?.email}</p>
+          <button className="workspace-button" onClick={() => void authActions.logout()}>Sign out</button>
+        </section>
+        <section className="workspace-card space-y-3 p-5">
+          <h2 className="text-lg font-semibold">Workspaces</h2>
+          {organizations.isPending && <Skeleton count={2} />}
+          {organizations.error && <QueryError error={organizations.error} retry={() => void organizations.refetch()} />}
+          {organizations.data?.map((organization) => (
+            <div className="flex flex-wrap items-center justify-between gap-3" key={organization.id}>
+              <div><p className="font-medium">{organization.name}</p><p className="text-xs text-slate-600">{organization.role}</p></div>
+              {active === organization.id ? <span className="workspace-tag">Current workspace</span> : <button className="workspace-button" disabled={change.isPending} onClick={() => change.mutate(organization.id)}>Switch</button>}
+            </div>
+          ))}
+          {change.error && <p role="alert" className="text-sm text-rose-700">{change.error.message}</p>}
+        </section>
+        {propertyId && ["OWNER", "ADMIN", "MANAGER"].includes(user?.activeOrganizationRole ?? "") && <section className="workspace-card space-y-3 p-5">
+          <h2 className="text-lg font-semibold">Property settings</h2>
+          <p className="text-sm text-slate-600">Update the address, contact details and rent due day for the selected property.</p>
+          <button className="workspace-button" onClick={() => setEditProperty(true)}>Edit property settings</button>
+        </section>}
       </div>
-
-      <form onSubmit={handleSave} className="p-6 rounded-3xl bg-white border border-slate-200/80 shadow-xs space-y-6">
-        <div className="space-y-4">
-          <h3 className="text-sm font-bold text-slate-900">General Information</h3>
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Organization Legal Brand Name
-            </label>
-            <input
-              type="text"
-              value={orgName}
-              onChange={(e) => setOrgName(e.target.value)}
-              required
-              className="w-full rounded-xl border border-slate-200 p-2.5 text-sm font-semibold"
-            />
-          </div>
-        </div>
-
-        <div className="pt-4 border-t border-slate-100 space-y-4">
-          <h3 className="text-sm font-bold text-slate-900">Recurring Billing & Grace Rules</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Default Rent Due Day
-              </label>
-              <input
-                type="number"
-                value={rentDueDay}
-                onChange={(e) => setRentDueDay(Number(e.target.value))}
-                min="1"
-                max="28"
-                className="w-full rounded-xl border border-slate-200 p-2.5 text-sm font-bold"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Grace Period (Days)
-              </label>
-              <input
-                type="number"
-                value={gracePeriodDays}
-                onChange={(e) => setGracePeriodDays(Number(e.target.value))}
-                min="0"
-                className="w-full rounded-xl border border-slate-200 p-2.5 text-sm font-bold"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Late Fee Penalty (₹)
-              </label>
-              <input
-                type="number"
-                value={lateFeeAmount}
-                onChange={(e) => setLateFeeAmount(Number(e.target.value))}
-                min="0"
-                className="w-full rounded-xl border border-slate-200 p-2.5 text-sm font-bold text-rose-600"
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="pt-4 border-t border-slate-100 flex justify-end">
-          <button
-            type="submit"
-            className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-md shadow-blue-500/20 transition cursor-pointer"
-          >
-            Save Configuration
-          </button>
-        </div>
-      </form>
-    </div>
+      {editProperty && propertyId && <AddPropertyModal editId={propertyId} onClose={() => setEditProperty(false)} />}
+    </>
   );
 }

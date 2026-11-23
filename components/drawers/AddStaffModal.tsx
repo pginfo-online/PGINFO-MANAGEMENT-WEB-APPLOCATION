@@ -7,23 +7,33 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/client";
 import { toast } from "sonner";
 
-export default function AddStaffModal() {
+interface StaffDetails {
+  id: string;
+  firstName: string;
+  lastName?: string;
+  mobile: string;
+  email?: string;
+  salary?: number;
+  designationId: string;
+}
+
+export default function AddStaffModal({ staff, onClose }: { staff?: StaffDetails; onClose?: () => void } = {}) {
   const { isAddStaffOpen, setAddStaffOpen } = useUiStore();
   const { selectedPropertyId } = usePropertyStore();
   const queryClient = useQueryClient();
 
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [mobile, setMobile] = useState("");
-  const [email, setEmail] = useState("");
-  const [salary, setSalary] = useState("20000");
-  const [designationId, setDesignationId] = useState("");
-  const [addAllProperties, setAddAllProperties] = useState(true);
+  const [firstName, setFirstName] = useState(staff?.firstName ?? "");
+  const [lastName, setLastName] = useState(staff?.lastName ?? "");
+  const [mobile, setMobile] = useState(staff?.mobile ?? "");
+  const [email, setEmail] = useState(staff?.email ?? "");
+  const [salary, setSalary] = useState(staff?.salary ? String(staff.salary / 100) : "");
+  const [designationId, setDesignationId] = useState(staff?.designationId ?? "");
+  const [chosenProperty, setChosenProperty] = useState(selectedPropertyId ?? "");
 
   const { data: designations } = useQuery({
     queryKey: ["staffDesignations"],
     queryFn: () => api.staff.listDesignations(),
-    enabled: isAddStaffOpen,
+    enabled: isAddStaffOpen || !!staff,
   });
 
   const { data: propertiesData } = useQuery({
@@ -33,24 +43,27 @@ export default function AddStaffModal() {
   });
 
   const properties = propertiesData?.data || [];
-  const propertyId = selectedPropertyId || (properties[0]?.id ?? "");
+  const propertyId = chosenProperty;
 
   const addStaffMutation = useMutation({
     mutationFn: async () => {
       const salaryPaise = Math.round(parseFloat(salary) * 100);
-      return api.staff.create({
-        propertyId,
+      const fields = {
         designationId: designationId || (designations?.[0]?.id ?? ""),
         firstName,
         lastName,
         mobile,
         email: email || undefined,
-        salary: salaryPaise,
+        salary: salaryPaise || undefined,
+      };
+      if (staff) return api.staff.update(staff.id, fields);
+      return api.staff.create({
+        ...fields, propertyId,
         joiningDate: new Date().toISOString().split("T")[0],
       });
     },
     onSuccess: () => {
-      toast.success(`Staff member ${firstName} added successfully!`);
+      toast.success(staff ? "Staff details updated" : "Staff member added");
       queryClient.invalidateQueries({ queryKey: ["staff"] });
       closeDrawer();
     },
@@ -60,6 +73,7 @@ export default function AddStaffModal() {
   });
 
   const closeDrawer = () => {
+    if (onClose) { onClose(); return; }
     setAddStaffOpen(false);
     setFirstName("");
     setLastName("");
@@ -67,11 +81,16 @@ export default function AddStaffModal() {
     setEmail("");
   };
 
-  if (!isAddStaffOpen) return null;
+  if (!isAddStaffOpen && !staff) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (mobile.length < 10) {
+    if (addStaffMutation.isPending) return;
+    if (!staff && !propertyId) {
+      toast.error("Choose a property");
+      return;
+    }
+    if (!/^[6-9][0-9]{9}$/.test(mobile)) {
       toast.error("Please enter a valid 10-digit mobile number");
       return;
     }
@@ -92,7 +111,7 @@ export default function AddStaffModal() {
             <div className="h-8 w-8 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center">
               <UserPlus className="h-4 w-4" />
             </div>
-            <h2 className="text-lg font-bold text-slate-900">Add Team Member</h2>
+            <h2 className="text-lg font-bold text-slate-900">{staff ? "Edit staff member" : "Add team member"}</h2>
           </div>
           <button
             onClick={closeDrawer}
@@ -193,19 +212,13 @@ export default function AddStaffModal() {
               </div>
             </div>
 
-            <div className="pt-2">
-              <label className="flex items-center gap-2 cursor-pointer p-3 rounded-2xl bg-slate-50 border border-slate-200/80">
-                <input
-                  type="checkbox"
-                  checked={addAllProperties}
-                  onChange={(e) => setAddAllProperties(e.target.checked)}
-                  className="h-4 w-4 rounded text-blue-600 focus:ring-blue-500"
-                />
-                <span className="text-xs font-semibold text-slate-700">
-                  Assign this member to all properties in organization
-                </span>
-              </label>
-            </div>
+            {!staff && <label className="workspace-form block text-sm">Property
+            <select className="workspace-button mt-2 w-full" required value={chosenProperty} onChange={(event) => setChosenProperty(event.target.value)}>
+              <option value="">Choose property</option>
+              {selectedPropertyId && !properties.some((property) => property.id === selectedPropertyId) && <option value={selectedPropertyId}>Selected property</option>}
+              {properties.map((property) => <option key={property.id} value={property.id}>{property.name}</option>)}
+            </select>
+          </label>}
           </div>
 
           <div className="pt-4 border-t border-slate-100 flex items-center gap-3 mt-6">

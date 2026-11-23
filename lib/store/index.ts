@@ -1,47 +1,40 @@
 import { create } from "zustand";
+import { authStorage } from "@/lib/api/client";
 
 interface PropertyState {
-  selectedPropertyId: string | null; // null represents all properties
-  selectedPropertyIds: string[];
+  selectedPropertyId: string | null;
   activePropertyName: string;
+  restoreSelection: () => void;
   setSelectedPropertyId: (id: string | null, name?: string) => void;
-  toggleProperty: (id: string) => void;
-  selectAll: (ids: string[]) => void;
-  clearAll: () => void;
+}
+
+function selectionKey() {
+  return `pginfo_property:${authStorage.getUser()?.id}:${authStorage.getOrgId()}`;
 }
 
 export const usePropertyStore = create<PropertyState>((set) => ({
   selectedPropertyId: null,
-  selectedPropertyIds: [],
-  activePropertyName: "All Properties",
-  setSelectedPropertyId: (id, name) =>
-    set({
-      selectedPropertyId: id,
-      activePropertyName: name || (id ? "Selected Property" : "All Properties"),
-    }),
-  toggleProperty: (id) =>
-    set((state) => {
-      const exists = state.selectedPropertyIds.includes(id);
-      const next = exists
-        ? state.selectedPropertyIds.filter((p) => p !== id)
-        : [...state.selectedPropertyIds, id];
-      return {
-        selectedPropertyIds: next,
-        selectedPropertyId: next.length === 1 ? next[0] : null,
-      };
-    }),
-  selectAll: (ids) =>
-    set({
-      selectedPropertyIds: ids,
-      selectedPropertyId: null,
-      activePropertyName: "All Properties",
-    }),
-  clearAll: () =>
-    set({
-      selectedPropertyIds: [],
-      selectedPropertyId: null,
-      activePropertyName: "All Properties",
-    }),
+  activePropertyName: "All properties",
+  restoreSelection: () => {
+    const saved = localStorage.getItem(selectionKey());
+    try {
+      if (saved) {
+        const { id, name } = JSON.parse(saved);
+        if (typeof id === "string" && typeof name === "string") {
+          set({ selectedPropertyId: id, activePropertyName: name });
+          return;
+        }
+      }
+    } catch {
+      localStorage.removeItem(selectionKey());
+    }
+    set({ selectedPropertyId: null, activePropertyName: "All properties" });
+  },
+  setSelectedPropertyId: (id, name = "All properties") => {
+    if (id) localStorage.setItem(selectionKey(), JSON.stringify({ id, name }));
+    else localStorage.removeItem(selectionKey());
+    set({ selectedPropertyId: id, activePropertyName: name });
+  },
 }));
 
 interface UiState {
