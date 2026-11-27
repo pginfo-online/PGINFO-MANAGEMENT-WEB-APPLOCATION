@@ -29,13 +29,23 @@ export interface AuthTokens {
 
 export interface UserProfile {
   id: string;
-  email: string;
+  email: string | null;
   firstName: string;
   lastName?: string;
   mobile?: string;
   organizationName?: string;
   activeOrganizationId?: string | null;
   activeOrganizationRole?: string | null;
+}
+
+export interface SendOtpResponse {
+  success: true;
+  message: string;
+  mobile: string;
+  maskedMobile: string;
+  purpose: "LOGIN" | "REGISTER";
+  expiresInSeconds: number;
+  resendAfterSeconds: number;
 }
 
 export type MemberRole = "ADMIN" | "MANAGER" | "STAFF" | "VIEWER";
@@ -106,43 +116,59 @@ export const authStorage = {
   },
 };
 
+async function finalizeAuthSession(
+  res: { tokens: AuthTokens; user: UserProfile },
+  fallbackOrgName?: string,
+): Promise<UserProfile> {
+  authStorage.setToken(res.tokens.accessToken);
+  authStorage.setRefreshToken(res.tokens.refreshToken);
+  authStorage.setUser(res.user);
+
+  if (res.user.activeOrganizationId) {
+    authStorage.setOrgId(res.user.activeOrganizationId);
+    return res.user;
+  }
+
+  try {
+    const orgs = await api.auth.listOrgs();
+    const targetOrg =
+      orgs.find((org) => org.id === res.user.activeOrganizationId) ?? orgs[0];
+    const organization =
+      targetOrg ??
+      (await api.auth.createOrg({
+        name:
+          fallbackOrgName?.trim() || `${res.user.firstName.trim()}'s Properties`,
+      }));
+    const switchRes = await api.auth.switchOrg(organization.id);
+    const user: UserProfile = {
+      ...res.user,
+      activeOrganizationId: organization.id,
+      activeOrganizationRole: switchRes.role,
+    };
+
+    authStorage.setToken(switchRes.accessToken);
+    authStorage.setOrgId(organization.id);
+    authStorage.setUser(user);
+    return user;
+  } catch (error) {
+    authStorage.clear();
+    throw error;
+  }
+}
+
+type PasswordCredentials = ({ email: string } | { mobile: string }) & {
+  password: string;
+};
+
 export const authActions = {
-  async login(credentials: { email: string; password: string }): Promise<UserProfile> {
+  async login(credentials: PasswordCredentials): Promise<UserProfile> {
     const res = await api.auth.login(credentials);
-    const initialToken = res.tokens.accessToken;
-    authStorage.setToken(initialToken);
-    authStorage.setRefreshToken(res.tokens.refreshToken);
-    authStorage.setUser(res.user);
+    return finalizeAuthSession(res);
+  },
 
-    if (res.user.activeOrganizationId) {
-      authStorage.setOrgId(res.user.activeOrganizationId);
-      return res.user;
-    }
-
-    try {
-      const orgs = await api.auth.listOrgs();
-      const targetOrg =
-        orgs.find((org) => org.id === res.user.activeOrganizationId) ?? orgs[0];
-      const organization =
-        targetOrg ??
-        (await api.auth.createOrg({
-          name: `${res.user.firstName}'s Properties`,
-        }));
-      const switchRes = await api.auth.switchOrg(organization.id);
-      const user = {
-        ...res.user,
-        activeOrganizationId: organization.id,
-        activeOrganizationRole: switchRes.role,
-      };
-
-      authStorage.setToken(switchRes.accessToken);
-      authStorage.setOrgId(organization.id);
-      authStorage.setUser(user);
-      return user;
-    } catch (error) {
-      authStorage.clear();
-      throw error;
-    }
+  async loginWithOtp(payload: { mobile: string; otp: string }): Promise<UserProfile> {
+    const res = await api.auth.loginWithOtp(payload);
+    return finalizeAuthSession(res);
   },
 
   async register(data: {
@@ -161,40 +187,19 @@ export const authActions = {
       mobile: data.mobile,
       organizationName: data.organizationName,
     });
+    return finalizeAuthSession(res, data.organizationName);
+  },
 
-    authStorage.setToken(res.tokens.accessToken);
-    authStorage.setRefreshToken(res.tokens.refreshToken);
-
-    try {
-      let user = res.user;
-      if (!user.activeOrganizationId) {
-        const organization = await api.auth.createOrg({
-          name:
-            data.organizationName?.trim() ||
-            `${data.firstName.trim()}'s Properties`,
-        });
-        const switchRes = await api.auth.switchOrg(organization.id);
-        authStorage.setToken(switchRes.accessToken);
-        user = {
-          ...user,
-          activeOrganizationId: organization.id,
-          activeOrganizationRole: switchRes.role,
-        };
-      }
-
-      if (!user.activeOrganizationId) {
-        throw new Error(
-          "Your account was created, but its workspace couldn't be set up. Please sign in to finish setup.",
-        );
-      }
-
-      authStorage.setOrgId(user.activeOrganizationId);
-      authStorage.setUser(user);
-      return user;
-    } catch (error) {
-      authStorage.clear();
-      throw error;
-    }
+  async registerWithOtp(data: {
+    mobile: string;
+    otp: string;
+    firstName: string;
+    lastName?: string;
+    email?: string;
+    organizationName?: string;
+  }): Promise<UserProfile> {
+    const res = await api.auth.registerWithOtp(data);
+    return finalizeAuthSession(res, data.organizationName);
   },
 
   async selectOrganization(id: string) {
@@ -267,7 +272,9 @@ async function request<T>(
   retry = true
 ): Promise<T> {
   const isAuthPublicPath =
-    path.startsWith("/auth/login") || path.startsWith("/auth/register");
+    path.startsWith("/auth/login") ||
+    path.startsWith("/auth/register") ||
+    path.startsWith("/auth/otp/");
   const token = authStorage.getToken();
   const orgId = authStorage.getOrgId();
   const userId = authStorage.getUser()?.id;
@@ -395,6 +402,127 @@ export interface Lead {
   visitScheduledAt?: string;
 }
 
+export interface OverviewPropertyCard {
+  id: string;
+  name: string;
+  type: string;
+  city: string;
+  code: string;
+  totalBeds: number;
+  occupiedBeds: number;
+  vacantBeds: number;
+  activeTenants: number;
+  underEvictionCount: number;
+  currentBookings: number;
+  pendingDuesPaise: number;
+  monthCollectedPaise: number;
+}
+
+export interface DashboardOverviewData {
+  period: { month: number; year: number; fy: boolean };
+  operational: {
+    totalProperties: number;
+    totalRooms: number;
+    totalBeds: number;
+    occupiedBeds: number;
+    availableBeds: number;
+    reservedBeds?: number;
+    occupancyRate: number;
+    currentResidents: number;
+    upcomingMoveIns: number;
+    periodMoveIns: number;
+    periodMoveOuts: number;
+    activeTenants?: number;
+    noticePeriodTenants: number;
+    activeLeads: number;
+    currentBookings: number;
+    rentDefaulters: number;
+    periodComplaintsCreated: number;
+    periodComplaintsResolved: number;
+    pendingComplaints: number;
+  };
+  financial: {
+    collectionBreakdown?: Array<{ dimension: string; label: string; amountPaise: number }>;
+    todayCollectedPaise?: number;
+    monthCollectedPaise?: number;
+    monthBilledPaise?: number;
+    monthOutstandingPaise?: number;
+    totalBilledPaise: number;
+    totalCollectedPaise: number;
+    outstandingBalancePaise: number;
+    totalExpensesPaise: number;
+    monthExpensesPaise?: number;
+    netCashflowPaise: number;
+    securityDepositsHeldPaise: number;
+    pendingDepositsPaise?: number;
+    currentDuesPaise?: number;
+    futureDuesPaise?: number;
+    overdueDuesPaise?: number;
+    todayDuesPaise?: number;
+  };
+  properties: OverviewPropertyCard[];
+  pendingTasks: {
+    tenantsWithoutIdProof: number;
+    tenantsWithoutAgreement: number;
+    tenantsWithoutEmail: number;
+    pendingComplaints: number;
+    rentDefaulters: number;
+  };
+  occupancyBreakdown: {
+    units: {
+      total: number;
+      occupied: number;
+      vacant: number;
+      semiVacant: number;
+      occupancyRate: number;
+      underNotice: number;
+      underNoticeWithBooking: number;
+      overbooked: number;
+    };
+    beds: {
+      total: number;
+      occupied: number;
+      vacant: number;
+      reserved: number;
+      occupancyRate: number;
+      underNotice: number;
+      underNoticeWithBooking: number;
+      overbooked: number;
+    };
+  };
+  journey: {
+    leads: {
+      total: number;
+      newCount: number;
+      contacted: number;
+      visited: number;
+      tokenPaid: number;
+      converted: number;
+      lost: number;
+    };
+    bookings: {
+      total: number;
+      confirmed: number;
+      checkedIn: number;
+      cancelled: number;
+      expired: number;
+    };
+    tenants: {
+      total: number;
+      active: number;
+      noticeRaised: number;
+      confirmedEviction: number;
+      renewalsDue: number;
+    };
+  };
+  issuesOverview: {
+    totalOpen: number;
+    byCategory: Array<{ label: string; count: number }>;
+    byStatus: Array<{ label: string; count: number }>;
+    byAssignee: Array<{ label: string; count: number }>;
+  };
+}
+
 interface ResidentDue {
   id: string;
   outstanding: number;
@@ -419,7 +547,7 @@ function queryString(params: Record<string, string | number | undefined>) {
 export const api = {
   // Auth & Org
   auth: {
-    login: (credentials: { email: string; password: string }) =>
+    login: (credentials: PasswordCredentials) =>
       request<{ tokens: AuthTokens; user: UserProfile }>("/auth/login", {
         method: "POST",
         body: JSON.stringify(credentials),
@@ -433,6 +561,33 @@ export const api = {
       organizationName?: string;
     }) =>
       request<{ tokens: AuthTokens; user: UserProfile }>("/auth/register", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
+    sendOtp: (payload: { mobile: string; purpose: "LOGIN" | "REGISTER"; email?: string }) =>
+      request<SendOtpResponse>("/auth/otp/send", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
+    resendOtp: (payload: { mobile: string; purpose: "LOGIN" | "REGISTER" }) =>
+      request<SendOtpResponse>("/auth/otp/resend", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
+    loginWithOtp: (payload: { mobile: string; otp: string }) =>
+      request<{ tokens: AuthTokens; user: UserProfile }>("/auth/otp/login", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
+    registerWithOtp: (payload: {
+      mobile: string;
+      otp: string;
+      firstName: string;
+      lastName?: string;
+      email?: string;
+      organizationName?: string;
+    }) =>
+      request<{ tokens: AuthTokens; user: UserProfile }>("/auth/otp/register", {
         method: "POST",
         body: JSON.stringify(payload),
       }),
@@ -514,6 +669,10 @@ export const api = {
           securityDepositsHeldFormatted: string;
         };
       }>(`/dashboard/metrics${q}`, { signal });
+    },
+    getOverview: (propertyId?: string, period?: { month: number; year: number; fy?: "true" }, signal?: AbortSignal) => {
+      const q = `?${queryString({ propertyId, ...period })}`;
+      return request<DashboardOverviewData>(`/dashboard/overview${q}`, { signal });
     },
   },
 
@@ -631,18 +790,30 @@ export const api = {
     list: (params?: {
       propertyId?: string;
       status?: string;
+      kycStatus?: string;
+      evictionStatus?: string;
+      moveInPreset?: string;
+      createdAtPreset?: string;
+      sortBy?: string;
+      sortOrder?: "asc" | "desc";
       search?: string;
       page?: number;
       limit?: number;
     }) => {
-      const sp = new URLSearchParams();
-      if (params?.propertyId) sp.set("propertyId", params.propertyId);
-      if (params?.status) sp.set("status", params.status);
-      if (params?.search) sp.set("search", params.search);
-      if (params?.page) sp.set("page", String(params.page));
-      if (params?.limit) sp.set("limit", String(params.limit || 50));
-      const qs = sp.toString() ? `?${sp.toString()}` : "";
-      return request<{ data: any[]; meta: any }>(`/residents${qs}`);
+      const qs = queryString({
+        propertyId: params?.propertyId,
+        status: params?.status,
+        kycStatus: params?.kycStatus,
+        evictionStatus: params?.evictionStatus,
+        moveInPreset: params?.moveInPreset,
+        createdAtPreset: params?.createdAtPreset,
+        sortBy: params?.sortBy,
+        sortOrder: params?.sortOrder,
+        search: params?.search,
+        page: params?.page,
+        limit: params?.limit || 50,
+      });
+      return request<{ data: any[]; meta: any }>(`/residents${qs ? `?${qs}` : ""}`);
     },
     get: (id: string) => request<any>(`/residents/${id}`),
     create: (data: any) =>

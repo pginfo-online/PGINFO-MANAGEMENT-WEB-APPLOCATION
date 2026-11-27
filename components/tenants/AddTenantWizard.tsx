@@ -34,6 +34,10 @@ export default function AddTenantWizard() {
   const params = useSearchParams();
   const client = useQueryClient();
   const selectedProperty = usePropertyStore((state) => state.selectedPropertyId);
+  const fullNameParam = (params.get("name") ?? "").trim();
+  const [defaultFirstName, ...defaultLastParts] = fullNameParam ? fullNameParam.split(/\s+/) : [""];
+  const defaultLastName = defaultLastParts.join(" ");
+  const defaultMobile = (params.get("mobile") ?? "").replace(/\D/g, "").slice(0, 10);
   const [allocation, setAllocation] = useState<Allocation>(() => ({
     propertyId: params.get("propertyId") ?? selectedProperty ?? "",
     roomId: params.get("roomId") ?? "",
@@ -131,9 +135,9 @@ export default function AddTenantWizard() {
           <section className="workspace-card space-y-4 p-5">
             <h2 className="text-lg font-semibold">Tenant details</h2>
             <div className="grid gap-4 sm:grid-cols-2">
-              <label>First name<input name="firstName" required autoComplete="given-name" /></label>
-              <label>Last name<input name="lastName" autoComplete="family-name" /></label>
-              <label>Mobile<input name="mobile" required type="tel" pattern="[6-9][0-9]{9}" maxLength={10} /></label>
+              <label>First name<input name="firstName" required autoComplete="given-name" defaultValue={defaultFirstName} /></label>
+              <label>Last name<input name="lastName" autoComplete="family-name" defaultValue={defaultLastName} /></label>
+              <label>Mobile<input name="mobile" required type="tel" pattern="[6-9][0-9]{9}" maxLength={10} defaultValue={defaultMobile} /></label>
               <label>Email (optional)<input name="email" type="email" /></label>
               <label>Alternate phone (optional)<input name="alternatePhone" type="tel" pattern="[6-9][0-9]{9}" maxLength={10} /></label>
               <label>Tenant type<select name="tenantType" defaultValue="PROFESSIONAL">{tenantTypes.map((type) => <option key={type} value={type}>{type.toLowerCase()}</option>)}</select></label>

@@ -137,3 +137,18 @@ cd frontend
 npm run lint
 # Runs ESLint and strict TypeScript type validations
 ```
+
+## Deploying on Vercel
+
+Import the frontend repository into Vercel and use the Next.js framework
+preset. If deploying from this directory as its own repository, set the Root
+Directory to `.`; if deploying from the monorepo, set it to `frontend`.
+Use `pnpm install --frozen-lockfile` to install dependencies and `pnpm build`
+to build the app.
+
+Production API requests are proxied server-side through Next.js to
+`https://app.pginfo.business` by default. To use a different backend for a
+Vercel environment, set `PGINFO_BACKEND_ORIGIN` to that backend's origin
+(scheme and host, without `/api/v1`). This variable is server-side and should
+not use the `NEXT_PUBLIC_` prefix. Local development continues to use
+`http://127.0.0.1:3009`.

@@ -39,7 +39,7 @@ export default function Header() {
             <Dropdown.Content className="workspace-menu" align="end" sideOffset={8}>
               <Dropdown.Label className="px-3 py-2">
                 <span className="block font-semibold">{[user?.firstName, user?.lastName].filter(Boolean).join(" ")}</span>
-                <span className="block text-xs text-slate-600">{user?.email}</span>
+                <span className="block text-xs text-slate-600">{user?.email || (user?.mobile ? `+91 ${user.mobile}` : "")}</span>
               </Dropdown.Label>
               <Dropdown.Separator className="my-1 border-t border-slate-200" />
               <Dropdown.Item asChild><Link href="/settings"><Settings className="size-4" /> Settings</Link></Dropdown.Item>

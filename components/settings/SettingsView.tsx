@@ -22,7 +22,7 @@ export default function SettingsView() {
         <section className="workspace-card space-y-3 p-5">
           <h2 className="text-lg font-semibold">Account</h2>
           <p className="font-medium">{[user?.firstName, user?.lastName].filter(Boolean).join(" ")}</p>
-          <p className="break-all text-sm text-slate-600">{user?.email}</p>
+          <p className="break-all text-sm text-slate-600">{user?.email || (user?.mobile ? `+91 ${user.mobile}` : "")}</p>
           <button className="workspace-button" onClick={() => void authActions.logout()}>Sign out</button>
         </section>
         <section className="workspace-card space-y-3 p-5">
